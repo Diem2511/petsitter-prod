@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { Client } from 'pg';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 10000;
@@ -8,7 +11,7 @@ const port = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// Ruta de prueba para ver si el servidor vive
+// Ruta de prueba para ver si el servidor vive y conecta a la DB
 app.get('/', async (req, res) => {
   // Intentamos conectar a Supabase para ver si las credenciales funcionan
   const client = new Client({
@@ -21,9 +24,10 @@ app.get('/', async (req, res) => {
     await client.connect();
     const result = await client.query('SELECT NOW()'); // Pide la hora a la DB
     await client.end();
+    
     res.send({ 
       status: 'OK', 
-      message: '¡El Backend de PetSitter está vivo!', 
+      message: '¡El Backend de PetSitter está vivo y conectado!', 
       database_time: result.rows[0].now 
     });
   } catch (err: any) {
