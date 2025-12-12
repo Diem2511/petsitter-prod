@@ -3,33 +3,26 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-let poolConfig: any;
-
-if (process.env.DATABASE_URL) {
-    // Parsear la DATABASE_URL para extraer las partes
-    const dbUrl = new URL(process.env.DATABASE_URL);
-    
-    poolConfig = {
-        user: dbUrl.username,
-        password: dbUrl.password,
-        host: dbUrl.hostname, // Esto debería dar el hostname, no la IP
-        port: parseInt(dbUrl.port || '5432'),
-        database: dbUrl.pathname.slice(1), // Remover el / inicial
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-        // Forzar familia de direcciones IPv4
-        ...(process.env.NODE_ENV === 'production' && { 
-            options: '-c client_encoding=UTF8'
-        })
-    };
-} else {
-    poolConfig = {
-        user: process.env.DB_USER || 'postgres',
-        host: process.env.DB_HOST || 'localhost',
-        database: process.env.DB_NAME || 'petsitter_db',
-        password: process.env.DB_PASSWORD || 'petsitter',
-        port: parseInt(process.env.DB_PORT || '5432'),
-    };
+// Validación: Si no hay URL, avisamos para no perder tiempo
+if (!process.env.DATABASE_URL) {
+    console.error('❌ FATAL: No existe la variable DATABASE_URL');
 }
 
-export const dbConfig = poolConfig;
+// Configuración directa para Supabase
+const poolConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false // Indispensable para Render + Supabase
+    }
+};
+
 export const pool = new Pool(poolConfig);
+
+// Test de conexión inmediato al arrancar
+pool.query('SELECT NOW()')
+    .then(() => console.log('✅ CONEXIÓN A SUPABASE EXITOSA (DB Arriba)'))
+    .catch(err => {
+        console.error('❌ ERROR CRÍTICO CONECTANDO A SUPABASE:', err.message);
+        // Opcional: ver si la URL está llegando (ocultando el password)
+        console.log('URL usada (check):', process.env.DATABASE_URL ? 'Si existe' : 'No existe');
+    });
