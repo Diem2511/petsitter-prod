@@ -1,7 +1,7 @@
 ﻿import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { Pool } from 'pg';
 import { dbConfig } from '../config/db.config';
-import { KycService } from '../services/kyc.service';
+import { KYCService } from '../services/kyc.service';
 import { UserService } from '../services/user.service';
 
 const pool = new Pool(dbConfig);
