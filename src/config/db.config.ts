@@ -1,16 +1,25 @@
 ﻿import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
-import * as dns from 'dns';
 
 dotenv.config();
-dns.setDefaultResultOrder('ipv4first');
 
 let poolConfig: any;
 
 if (process.env.DATABASE_URL) {
+    // Parsear la DATABASE_URL para extraer las partes
+    const dbUrl = new URL(process.env.DATABASE_URL);
+    
     poolConfig = {
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        user: dbUrl.username,
+        password: dbUrl.password,
+        host: dbUrl.hostname, // Esto debería dar el hostname, no la IP
+        port: parseInt(dbUrl.port || '5432'),
+        database: dbUrl.pathname.slice(1), // Remover el / inicial
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        // Forzar familia de direcciones IPv4
+        ...(process.env.NODE_ENV === 'production' && { 
+            options: '-c client_encoding=UTF8'
+        })
     };
 } else {
     poolConfig = {
