@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkinHandler = checkinHandler;
 const pg_1 = require("pg");
@@ -15,60 +24,62 @@ const BOOKING_SERVICE_LON = -64.1887; // Longitud de Córdoba, Argentina
  * Handler para validar la posición del Sitter al momento de realizar el check-in de un servicio.
  * RUTA PROTEGIDA: Requiere JWT de un Sitter.
  */
-async function checkinHandler(event) {
-    // 1. AUTORIZACIÓN (Verificar JWT)
-    if (!event.headers.Authorization) {
-        return { statusCode: 401, body: JSON.stringify({ message: "Autorización requerida." }) };
-    }
-    try {
-        const payload = userService.verifyToken(event.headers.Authorization);
-        // La validación de check-in solo la pueden realizar los Sitters
-        if (payload.userType !== 'sitter') {
-            return { statusCode: 403, body: JSON.stringify({ message: "Acceso denegado: Solo Sitters pueden realizar check-in." }) };
+function checkinHandler(event) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // 1. AUTORIZACIÓN (Verificar JWT)
+        if (!event.headers.Authorization) {
+            return { statusCode: 401, body: JSON.stringify({ message: "Autorización requerida." }) };
         }
-    }
-    catch (error) {
-        return { statusCode: 401, body: JSON.stringify({ message: "Token inválido o expirado." }) };
-    }
-    // 2. LÓGICA DE GEOLOCALIZACIÓN
-    try {
-        if (!event.body) {
-            return { statusCode: 400, body: JSON.stringify({ message: "Debe proporcionar latitud y longitud." }) };
+        try {
+            const payload = userService.verifyToken(event.headers.Authorization);
+            // La validación de check-in solo la pueden realizar los Sitters
+            if (payload.userType !== 'sitter') {
+                return { statusCode: 403, body: JSON.stringify({ message: "Acceso denegado: Solo Sitters pueden realizar check-in." }) };
+            }
         }
-        const { latitude, longitude } = JSON.parse(event.body);
-        if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-            return { statusCode: 400, body: JSON.stringify({ message: "Coordenadas inválidas." }) };
+        catch (error) {
+            return { statusCode: 401, body: JSON.stringify({ message: "Token inválido o expirado." }) };
         }
-        // Simulación: Obtener ubicación del servicio (en una app real, se obtendría de la tabla bookings)
-        const serviceLocation = { lat: BOOKING_SERVICE_LAT, lon: BOOKING_SERVICE_LON };
-        const { isWithinArea, distance } = geoService.isWithinServiceArea(latitude, longitude, serviceLocation.lat, serviceLocation.lon);
-        if (isWithinArea) {
-            // En un app real: Actualizar estado de la reserva a 'IN_PROGRESS'
+        // 2. LÓGICA DE GEOLOCALIZACIÓN
+        try {
+            if (!event.body) {
+                return { statusCode: 400, body: JSON.stringify({ message: "Debe proporcionar latitud y longitud." }) };
+            }
+            const { latitude, longitude } = JSON.parse(event.body);
+            if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+                return { statusCode: 400, body: JSON.stringify({ message: "Coordenadas inválidas." }) };
+            }
+            // Simulación: Obtener ubicación del servicio (en una app real, se obtendría de la tabla bookings)
+            const serviceLocation = { lat: BOOKING_SERVICE_LAT, lon: BOOKING_SERVICE_LON };
+            const { isWithinArea, distance } = geoService.isWithinServiceArea(latitude, longitude, serviceLocation.lat, serviceLocation.lon);
+            if (isWithinArea) {
+                // En un app real: Actualizar estado de la reserva a 'IN_PROGRESS'
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: "✅ Check-in exitoso. Dentro de la zona de servicio.",
+                        status: "IN_PROGRESS",
+                        distance_km: distance
+                    })
+                };
+            }
+            else {
+                return {
+                    statusCode: 403,
+                    body: JSON.stringify({
+                        message: `❌ Check-in fallido. Fuera del área permitida. Distancia: ${distance} km.`,
+                        status: "BLOCKED",
+                        distance_km: distance
+                    })
+                };
+            }
+        }
+        catch (error) {
+            console.error("Error en checkinHandler:", error);
             return {
-                statusCode: 200,
-                body: JSON.stringify({
-                    message: "✅ Check-in exitoso. Dentro de la zona de servicio.",
-                    status: "IN_PROGRESS",
-                    distance_km: distance
-                })
+                statusCode: 500,
+                body: JSON.stringify({ message: "Error interno al procesar check-in." })
             };
         }
-        else {
-            return {
-                statusCode: 403,
-                body: JSON.stringify({
-                    message: `❌ Check-in fallido. Fuera del área permitida. Distancia: ${distance} km.`,
-                    status: "BLOCKED",
-                    distance_km: distance
-                })
-            };
-        }
-    }
-    catch (error) {
-        console.error("Error en checkinHandler:", error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: "Error interno al procesar check-in." })
-        };
-    }
+    });
 }

@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TrustGraphService = void 0;
 const ICV_PONDERATION = {
@@ -8,23 +17,26 @@ const ICV_PONDERATION = {
     DISTANCE_MAX_SCORE: 50 // Puntuación máxima por cercanía física
 };
 class TrustGraphService {
-    pool;
     constructor(pool) {
         this.pool = pool;
     }
     /**
      * Registra la ubicación inicial de un usuario (Sitter o Dueño).
      */
-    async setInitialLocation(userId, lat, lon, addressHash) {
-        // En una app real, esto sincronizaría a Neo4j el nodo Persona y Direccion.
-        await this.pool.query('INSERT INTO user_locations (user_id, latitude, longitude, address_hash) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude', [userId, lat, lon, addressHash]);
+    setInitialLocation(userId, lat, lon, addressHash) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // En una app real, esto sincronizaría a Neo4j el nodo Persona y Direccion.
+            yield this.pool.query('INSERT INTO user_locations (user_id, latitude, longitude, address_hash) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude', [userId, lat, lon, addressHash]);
+        });
     }
     /**
      * Registra un aval de confianza.
      */
-    async addTrustAval(sitterId, validatorId, avalType) {
-        // Esto crearía la relación [:AVALA_A] en Neo4j.
-        await this.pool.query('INSERT INTO user_trust_avals (sitter_id, validator_id, aval_type) VALUES ($1, $2, $3) ON CONFLICT (sitter_id, validator_id) DO NOTHING', [sitterId, validatorId, avalType]);
+    addTrustAval(sitterId, validatorId, avalType) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // Esto crearía la relación [:AVALA_A] en Neo4j.
+            yield this.pool.query('INSERT INTO user_trust_avals (sitter_id, validator_id, aval_type) VALUES ($1, $2, $3) ON CONFLICT (sitter_id, validator_id) DO NOTHING', [sitterId, validatorId, avalType]);
+        });
     }
     /**
      * ALGORITMO DE ÍNDICE DE CONFIANZA VECINAL (ICV)
@@ -34,16 +46,17 @@ class TrustGraphService {
      * 4. Devuelve ranking.
      * @param clientId El Dueño que busca Sitters.
      */
-    async getSitterRecommendations(clientId) {
-        // 1. Obtener la ubicación del cliente
-        const clientLocResult = await this.pool.query('SELECT latitude, longitude, address_hash FROM user_locations WHERE user_id = $1', [clientId]);
-        if (clientLocResult.rows.length === 0) {
-            throw new Error("Ubicación del cliente no registrada. ICV no puede calcularse.");
-        }
-        const clientLoc = clientLocResult.rows[0];
-        // 2. Consulta compleja que junta Sitters, Avales y Ubicaciones
-        // NOTA: Esta query SQL simula la complejidad y las uniones que haría un Cypher Query.
-        const query = `
+    getSitterRecommendations(clientId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // 1. Obtener la ubicación del cliente
+            const clientLocResult = yield this.pool.query('SELECT latitude, longitude, address_hash FROM user_locations WHERE user_id = $1', [clientId]);
+            if (clientLocResult.rows.length === 0) {
+                throw new Error("Ubicación del cliente no registrada. ICV no puede calcularse.");
+            }
+            const clientLoc = clientLocResult.rows[0];
+            // 2. Consulta compleja que junta Sitters, Avales y Ubicaciones
+            // NOTA: Esta query SQL simula la complejidad y las uniones que haría un Cypher Query.
+            const query = `
             SELECT
                 u.user_id AS sitter_id,
                 u.email, -- Solo para el test
@@ -68,27 +81,28 @@ class TrustGraphService {
             GROUP BY u.user_id, ul.latitude, ul.longitude, ul.address_hash
             ORDER BY aval_score DESC;
         `;
-        const result = await this.pool.query(query);
-        // 3. Cálculo de Score por Distancia (Física) y Ponderación Final
-        const recommendations = result.rows.map(row => {
-            const { sitter_id, sitter_lat, sitter_lon, aval_score, base_score } = row;
-            // Simulación de Cálculo de Distancia (Fórmula de Haversine simplificada)
-            // Se usa un mock de la distancia para simular la ponderación
-            const distanceKM = this.calculateDistance(parseFloat(clientLoc.latitude), parseFloat(clientLoc.longitude), parseFloat(sitter_lat), parseFloat(sitter_lon));
-            // Puntuación de Distancia: 50 pts si está muy cerca (0 km) -> 0 pts si está lejos (ej. > 5km)
-            const distanceScore = Math.max(0, ICV_PONDERATION.DISTANCE_MAX_SCORE * (1 - (distanceKM / 5)));
-            // Puntuación ICV Final
-            const finalICV = base_score + parseFloat(aval_score) + distanceScore;
-            return {
-                sitterId: sitter_id,
-                distanceKM: parseFloat(distanceKM.toFixed(2)),
-                avalScore: parseFloat(aval_score),
-                distanceScore: parseFloat(distanceScore.toFixed(2)),
-                finalICV: parseFloat(finalICV.toFixed(2)),
-            };
+            const result = yield this.pool.query(query);
+            // 3. Cálculo de Score por Distancia (Física) y Ponderación Final
+            const recommendations = result.rows.map(row => {
+                const { sitter_id, sitter_lat, sitter_lon, aval_score, base_score } = row;
+                // Simulación de Cálculo de Distancia (Fórmula de Haversine simplificada)
+                // Se usa un mock de la distancia para simular la ponderación
+                const distanceKM = this.calculateDistance(parseFloat(clientLoc.latitude), parseFloat(clientLoc.longitude), parseFloat(sitter_lat), parseFloat(sitter_lon));
+                // Puntuación de Distancia: 50 pts si está muy cerca (0 km) -> 0 pts si está lejos (ej. > 5km)
+                const distanceScore = Math.max(0, ICV_PONDERATION.DISTANCE_MAX_SCORE * (1 - (distanceKM / 5)));
+                // Puntuación ICV Final
+                const finalICV = base_score + parseFloat(aval_score) + distanceScore;
+                return {
+                    sitterId: sitter_id,
+                    distanceKM: parseFloat(distanceKM.toFixed(2)),
+                    avalScore: parseFloat(aval_score),
+                    distanceScore: parseFloat(distanceScore.toFixed(2)),
+                    finalICV: parseFloat(finalICV.toFixed(2)),
+                };
+            });
+            // 4. Devolver ordenado por ICV
+            return recommendations.sort((a, b) => b.finalICV - a.finalICV);
         });
-        // 4. Devolver ordenado por ICV
-        return recommendations.sort((a, b) => b.finalICV - a.finalICV);
     }
     /**
      * Fórmula de Haversine para simular la distancia entre dos puntos (en km).

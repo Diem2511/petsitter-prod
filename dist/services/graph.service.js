@@ -32,6 +32,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -50,35 +59,39 @@ function getDriver() {
     }
     return driver;
 }
-async function closeDriver() {
-    if (driver) {
-        await driver.close();
-        driver = null;
-    }
+function closeDriver() {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (driver) {
+            yield driver.close();
+            driver = null;
+        }
+    });
 }
 // --- FUNCIÓN REQUERIDA POR SEARCH.TS ---
-async function getTrustLevel(sourceId, targetId) {
-    const driver = getDriver();
-    const session = driver.session();
-    // Lógica simplificada: Si hay relación directa TRUSTS, devuelve el nivel.
-    // Si no, devuelve 0.0. (Aquí luego iría el algoritmo BFS/Dijkstra)
-    const query = `
+function getTrustLevel(sourceId, targetId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const driver = getDriver();
+        const session = driver.session();
+        // Lógica simplificada: Si hay relación directa TRUSTS, devuelve el nivel.
+        // Si no, devuelve 0.0. (Aquí luego iría el algoritmo BFS/Dijkstra)
+        const query = `
         MATCH (a:Person {id: $sourceId})-[r:TRUSTS]->(b:Person {id: $targetId})
         RETURN r.level AS level
     `;
-    try {
-        const result = await session.run(query, { sourceId, targetId });
-        if (result.records.length > 0) {
-            // Convertimos el numero de Neo4j a JS number
-            return result.records[0].get('level');
+        try {
+            const result = yield session.run(query, { sourceId, targetId });
+            if (result.records.length > 0) {
+                // Convertimos el numero de Neo4j a JS number
+                return result.records[0].get('level');
+            }
+            return 0.0;
         }
-        return 0.0;
-    }
-    catch (error) {
-        console.error("Error obteniendo Trust Level:", error);
-        return 0.0; // Fallback seguro
-    }
-    finally {
-        await session.close();
-    }
+        catch (error) {
+            console.error("Error obteniendo Trust Level:", error);
+            return 0.0; // Fallback seguro
+        }
+        finally {
+            yield session.close();
+        }
+    });
 }

@@ -32,62 +32,75 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserService = void 0;
 const bcrypt = __importStar(require("bcryptjs"));
 const jwt = __importStar(require("jsonwebtoken"));
 const uuid_1 = require("uuid");
 class UserService {
-    JWT_SECRET;
-    pool;
     constructor(pool) {
         this.pool = pool;
         this.JWT_SECRET = process.env.JWT_SECRET || 'mi-clave-ultra-secreta-de-32-caracteres'; // Leer del .env
     }
-    async registerUser(email, userType, password, firstName, lastName) {
-        const userId = (0, uuid_1.v4)();
-        let passwordHash = undefined;
-        if (password) {
-            passwordHash = await bcrypt.hash(password, 10);
-        }
-        else {
-            // Generar hash para el campo requerido, incluso si el password es opcional en la prueba.
-            passwordHash = await bcrypt.hash('default-password', 10);
-        }
-        try {
-            const query = `
+    registerUser(email, userType, password, firstName, lastName) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const userId = (0, uuid_1.v4)();
+            let passwordHash = undefined;
+            if (password) {
+                passwordHash = yield bcrypt.hash(password, 10);
+            }
+            else {
+                // Generar hash para el campo requerido, incluso si el password es opcional en la prueba.
+                passwordHash = yield bcrypt.hash('default-password', 10);
+            }
+            try {
+                const query = `
                 INSERT INTO users (user_id, first_name, last_name, email, password_hash, user_type, kyc_status)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING user_id;
             `;
-            const values = [userId, firstName, lastName, email, passwordHash, userType, 'NOT_STARTED'];
-            await this.pool.query(query, values);
-            const token = this.generateToken(userId, email, userType);
-            return { token, userId };
-        }
-        catch (error) {
-            console.error("Database error during registration:", error);
-            // Re-lanzar error con un mensaje más claro para el handler
-            throw new Error("Fallo en la base de datos durante el registro.");
-        }
+                const values = [userId, firstName, lastName, email, passwordHash, userType, 'NOT_STARTED'];
+                yield this.pool.query(query, values);
+                const token = this.generateToken(userId, email, userType);
+                return { token, userId };
+            }
+            catch (error) {
+                console.error("Database error during registration:", error);
+                // Re-lanzar error con un mensaje más claro para el handler
+                throw new Error("Fallo en la base de datos durante el registro.");
+            }
+        });
     }
-    async getUserByEmail(email) {
-        const query = `
+    getUserByEmail(email) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const query = `
             SELECT user_id, first_name, last_name, email, password_hash, user_type, kyc_status
             FROM users 
             WHERE email = $1;
         `;
-        const result = await this.pool.query(query, [email]);
-        return result.rows.length > 0 ? result.rows[0] : null;
+            const result = yield this.pool.query(query, [email]);
+            return result.rows.length > 0 ? result.rows[0] : null;
+        });
     }
-    async getUserById(userId) {
-        const query = `
+    getUserById(userId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const query = `
             SELECT user_id, first_name, last_name, email, password_hash, user_type, kyc_status
             FROM users 
             WHERE user_id = $1;
         `;
-        const result = await this.pool.query(query, [userId]);
-        return result.rows.length > 0 ? result.rows[0] : null;
+            const result = yield this.pool.query(query, [userId]);
+            return result.rows.length > 0 ? result.rows[0] : null;
+        });
     }
     generateToken(userId, email, userType) {
         return jwt.sign({ userId, email, userType }, this.JWT_SECRET, { expiresIn: '7d' });

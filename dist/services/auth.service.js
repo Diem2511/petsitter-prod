@@ -32,6 +32,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -78,13 +87,13 @@ exports.generateToken = generateToken;
 /**
  * Registra un nuevo usuario en la base de datos (PostgreSQL).
  */
-const registerUser = async (firstName, lastName, email, password_hash, userType) => {
+const registerUser = (firstName, lastName, email, password_hash, userType) => __awaiter(void 0, void 0, void 0, function* () {
     const sql = `
         INSERT INTO users (first_name, last_name, email, password_hash, user_type)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING user_id, email, user_type, created_at;
     `;
-    const result = await (0, db_1.query)(sql, [firstName, lastName, email, password_hash, userType]);
+    const result = yield (0, db_1.query)(sql, [firstName, lastName, email, password_hash, userType]);
     return result.rows[0];
-};
+});
 exports.registerUser = registerUser;
