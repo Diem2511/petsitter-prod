@@ -3,25 +3,28 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configuración de conexión con el FIX para certificado auto-firmado
 const connectionConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // <--- ESTO ES LO QUE SOLUCIONA EL ERROR "SELF-SIGNED CERTIFICATE"
+        rejectUnauthorized: false,
     }
 };
 
-// 1. Exportamos la configuración (necesario para que los handlers no den error de compilación)
 export const dbConfig = connectionConfig;
 
-// 2. Exportamos la pool (necesario para las consultas a la base de datos)
-export const pool = new Pool(connectionConfig);
+// AQUÍ ESTÁ EL CAMBIO IMPORTANTE PARA EL POOL
+// A veces el Pool necesita que el SSL se pase explícitamente fuera del connectionString
+export const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
-// Logs para monitorear la salud de la conexión
 pool.on('connect', () => {
-    console.log('✅ DB: Conexión establecida con el Pool');
+    console.log('✅ DB: Pool conectado');
 });
 
 pool.on('error', (err) => {
-    console.error('❌ DB: Error inesperado en el Pool:', err);
+    console.error('❌ DB: Error en Pool:', err);
 });
