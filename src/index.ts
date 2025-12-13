@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { Client } from 'pg';
 import * as dotenv from 'dotenv';
+import pool from './config/postgres.config'; // Importamos la pool que acabamos de crear
 
 dotenv.config();
 
@@ -11,36 +11,49 @@ const port = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-app.get('/', async (req, res) => {
-  // Configuración LIMPIA que TypeScript acepta
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false // Esta es la única línea vital para evitar el error de certificado
+// --- ENDPOINT DE SALUD (Health Check) ---
+// Render usa esto para saber si tu app está lista
+app.get('/health', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT NOW()');
+        res.status(200).json({ 
+            status: 'OK', 
+            db_status: 'Connected', 
+            time: result.rows[0].now 
+        });
+    } catch (error: any) {
+        console.error('Health check failed:', error);
+        res.status(500).json({ 
+            status: 'ERROR', 
+            db_status: 'Disconnected', 
+            error: error.message 
+        });
     }
-  });
+});
 
+// --- RUTA RAÍZ (Diagnóstico visible) ---
+app.get('/', async (req, res) => {
   try {
-    await client.connect();
-    const result = await client.query('SELECT NOW() as now');
-    await client.end();
-    
+    const client = await pool.connect();
+    const result = await client.query('SELECT version()');
+    client.release(); // Importante liberar el cliente
+
     res.send({ 
       status: 'OK', 
-      message: '¡CONEXIÓN EXITOSA! (SSL Bypass activado)', 
-      time: result.rows[0].now 
+      message: '¡El Backend de PetSitter está vivo!', 
+      environment: process.env.NODE_ENV || 'development',
+      database_version: result.rows[0].version
     });
   } catch (err: any) {
-    console.error('Error detallado:', err);
     res.status(500).send({ 
       status: 'ERROR', 
-      message: 'Fallo de conexión DB', 
-      code: err.code || 'UNKNOWN',
-      details: err.message
+      message: 'El servidor prende pero falla la DB', 
+      error: err.message 
     });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Servidor escuchando en el puerto ${port}`);
+  console.log(`🚀 Servidor escuchando en el puerto ${port}`);
+  console.log(`ipv4first flag debería estar activa.`);
 });
