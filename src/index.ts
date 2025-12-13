@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: RECONSTRUCCIÓN DE HOSTNAME ABSOLUTO (5432)
+// CONFIGURACIÓN DE CONEXIÓN: HOSTNAME DEFINITIVO (INCLUSIÓN DE '.db')
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
@@ -23,46 +23,36 @@ if (!connectionString) {
     process.exit(1);
 }
 
-// 1. Extraer el Project Reference ID (qzgdviycwxzmvwtazkis)
-const projectIdMatch = connectionString.match(/postgres\.([a-z0-9]+)/);
-let projectId = projectIdMatch && projectIdMatch[1] ? projectIdMatch[1] : '';
+// 1. ANULACIÓN DEL POOLER: Reemplaza el puerto 6543 (Pooler) por 5432 (Motor Directo)
+let finalConnectionString = connectionString.replace(':6543', ':5432');
 
-// 2. Reemplazar la parte del host para forzar el formato ProjectID.Region.supabase.co
-// y el puerto 5432.
+// 2. Extraer el host actual (que aún tiene '.pooler')
+const hostMatch = finalConnectionString.match(/@(.+?):/);
 
-if (projectId) {
-    // Busca la parte del dominio (ej: aws-0-sa-east-1.pooler.supabase.com)
-    let domainPart = connectionString.match(/@(.+?):/);
-    if (domainPart && domainPart[1]) {
-        // Limpiamos el dominio de 'pooler' y lo dejamos en el formato básico
-        let baseHost = domainPart[1].replace('.pooler.supabase.com', '.supabase.co');
-        
-        // ¡RECONSTRUCCIÓN FINAL! Inserta el Project ID al inicio del hostname.
-        let newHost = `${projectId}.${baseHost.replace(projectId + '.', '')}`; // Asegura que no se duplique
-        
-        // Reemplaza el host, el puerto y elimina la query string
-        let finalConnectionString = connectionString
-            .replace(domainPart[1], newHost) // Inyecta el host reconstruido
-            .replace(':6543', ':5432')        // Cambia el puerto
-            .split('?')[0];                   // Elimina la query string
+if (hostMatch && hostMatch[1]) {
+    let currentHost = hostMatch[1];
+    
+    // 3. ¡CORRECCIÓN FINAL! Cambiamos '.pooler.supabase.com' a '.db.supabase.co' (o .com)
+    // Esto fuerza la estructura del motor de DB directo que la Corporación usa:
+    // <ProjectRef>.<Region>.db.supabase.com
+    let newHost = currentHost.replace('.pooler.', '.db.'); 
 
-        // Asigna la cadena final
-        connectionString = finalConnectionString;
-        
-        console.log(`✅ Hostname reconstruido y port 5432 forzado: ${newHost}`);
-    }
+    // Reemplaza el host completo en la cadena de conexión
+    finalConnectionString = finalConnectionString.replace(currentHost, newHost);
 }
 
+// 4. Limpiamos 'sslmode' y 'query string' remanente
+finalConnectionString = finalConnectionString.replace('sslmode=require', '').split('?')[0];
 
 const pool = new Pool({
-    connectionString: connectionString, 
+    connectionString: finalConnectionString, 
     ssl: { 
         rejectUnauthorized: false
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO ACCESO DIRECTO Y RECONSTRUCCIÓN DE HOSTNAME)...');
+console.log('🚀 Iniciando Backend (MODO ACCESO DIRECTO Y CORRECCIÓN DE HOSTNAME FINAL)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS (el resto del código sigue igual)
@@ -80,13 +70,13 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! El canal está libre para la subversión.',
+            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! ¡EL CANAL DE DATOS ESTÁ ABIERTO!',
             hora: result.rows[0].hora,
-            connectionStringUsed: connectionString 
+            connectionStringUsed: finalConnectionString 
         });
     } catch (error: any) {
         console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
-        res.status(500).json({ success: false, error: error.message, connectionStringUsed: connectionString });
+        res.status(500).json({ success: false, error: error.message, connectionStringUsed: finalConnectionString });
     }
 });
 
