@@ -13,13 +13,15 @@ const app = express();
 const PORT = process.env.PORT || 3000; 
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: INYECCIÓN MANUAL DE CADENA NEON (Modo Asalto)
+// CONFIGURACIÓN DE CONEXIÓN: ¡INYECCIÓN DE CADENA CON CLAVE RECIÉN RESETEADA!
 // =========================================================================
 
-// --- ¡CADENA DE CONEXIÓN INYECTADA DIRECTAMENTE! ---
-const CONNECTION_STRING_INJECTED = 'postgresql://neondb_owner:npg_bNxxxxxxxxxx@ep-proud-dawn-ahel3tta-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+// --- ¡CADENA DE CONEXIÓN INYECTADA DIRECTAMENTE Y ÚNICA! ---
+// Usamos la clave que acabas de resetear de la captura 15:11:28.
+// ¡DEBES REEMPLAZAR LOS '***' CON EL RESTO DE LA CLAVE REAL DE TU CAPTURA!
+const CONNECTION_STRING_INJECTED = 'postgresql://neondb_owner:npg_bV[EL_RESTO_DE_TU_CLAVE_MAESTRA]@ep-proud-dawn-ahel3tta-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
-// Usamos la cadena inyectada para forzar la conexión.
+// ¡Pool configurado solo con la cadena inyectada!
 const pool = new Pool({
     connectionString: CONNECTION_STRING_INJECTED, 
     ssl: { 
@@ -28,7 +30,7 @@ const pool = new Pool({
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - ¡INYECCIÓN FORZADA DE URL!)...');
+console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - ¡INYECCIÓN DE CLAVE MAESTRA!)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS
@@ -42,14 +44,19 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA ABIERTA! Acceso directo a Neon.',
+            message: '✅ ¡CANAL DE DATOS ABIERTO! Acceso a Neon con clave nueva.',
             hora: result.rows[0].hora,
-            database: 'Neon'
+            database: 'Neon',
+            status: 'Injection successful.'
         });
     } catch (error: any) {
         console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
-        // Si hay fallo, mostramos el error sin la cadena de conexión por seguridad
-        res.status(500).json({ success: false, error: error.message, database: 'Neon', note: 'Connection failed, check injected URL.' });
+        res.status(500).json({ 
+            success: false, 
+            error: error.message, 
+            database: 'Neon', 
+            note: 'FINAL FAILURE: Check Firewall/Password.' 
+        });
     }
 });
 
