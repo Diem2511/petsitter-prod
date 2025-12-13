@@ -10,11 +10,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkinHandler = checkinHandler;
-const pg_1 = require("pg");
 const db_config_1 = require("../config/db.config");
 const geo_service_1 = require("../services/geo.service");
 const user_service_1 = require("../services/user.service"); // Para validación JWT
-const pool = new pg_1.Pool(db_config_1.dbConfig);
+const pool = db_config_1.dbConfig.pool;
 const geoService = new geo_service_1.GeoService();
 const userService = new user_service_1.UserService(pool);
 // Coordenadas de prueba para el lugar de servicio (Simulación de la ubicación de la reserva)

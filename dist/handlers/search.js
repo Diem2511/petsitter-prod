@@ -10,10 +10,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchHandler = void 0;
-const pg_1 = require("pg");
 const db_config_1 = require("../config/db.config");
 const geo_service_1 = require("../services/geo.service");
-const pool = new pg_1.Pool(db_config_1.dbConfig);
+const pool = db_config_1.dbConfig.pool;
 const searchHandler = (event) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { latitude, longitude, radius } = event.queryStringParameters || {};

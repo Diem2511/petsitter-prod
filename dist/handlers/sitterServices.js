@@ -11,11 +11,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createServiceHandler = createServiceHandler;
 exports.processPaymentHandler = processPaymentHandler;
-const pg_1 = require("pg");
 const sitter_service_1 = require("../services/sitter.service");
 const db_config_1 = require("../config/db.config");
 // Inicialización de la pool de PostgreSQL
-const pool = new pg_1.Pool(db_config_1.dbConfig);
+const pool = db_config_1.dbConfig.pool;
 const sitterService = new sitter_service_1.SitterService(pool);
 /**
  * Handler para crear un nuevo servicio ofrecido por un Sitter.

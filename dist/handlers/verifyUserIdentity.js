@@ -10,11 +10,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyUserIdentityHandler = verifyUserIdentityHandler;
-const pg_1 = require("pg");
 const db_config_1 = require("../config/db.config");
 const user_service_1 = require("../services/user.service");
 const kyc_service_1 = require("../services/kyc.service");
-const pool = new pg_1.Pool(db_config_1.dbConfig);
+const pool = db_config_1.dbConfig.pool;
 const userService = new user_service_1.UserService(pool);
 const kycService = new kyc_service_1.KYCService(pool);
 /**

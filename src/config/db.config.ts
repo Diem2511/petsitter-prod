@@ -1,17 +1,29 @@
-﻿import pool from './postgres.config';
+﻿// src/config/db.config.ts
+import { Pool } from 'pg';
 
-// Simulamos la estructura que tus handlers antiguos esperan
+// Usamos la misma configuración que en index.ts
+const connectionString = 'postgresql://postgres:riXQZxxxxxx4o3Ne@db.qzgdviycwxzmvwtazkis.supabase.co:5432/postgres?sslmode=require';
+
+const pool = new Pool({
+  connectionString: connectionString,
+  ssl: { rejectUnauthorized: false }
+});
+
+// Exportamos como 'dbConfig' para compatibilidad con tus handlers antiguos
 export const dbConfig = {
-    // Si tus handlers hacen "const pool = dbConfig.pool", esto funcionará:
-    pool: pool,
-    
-    // Si hacen "dbConfig.query(...)", esto funcionará:
-    query: (text: string, params?: any[]) => pool.query(text, params),
-    
-    // Propiedades de configuración "dummy" para engañar a TypeScript
-    // si intentan pasar dbConfig al constructor de Pool
-    host: 'localhost',
-    user: 'postgres',
-    password: '',
-    database: 'postgres'
+  pool: pool,
+  query: pool.query.bind(pool),
+  execute: pool.query.bind(pool),
+  getConnection: async () => {
+    const client = await pool.connect();
+    return {
+      query: client.query.bind(client),
+      release: () => client.release(),
+      end: () => client.release()
+    };
+  }
 };
+
+// También exportamos el pool directamente por si acaso
+export { pool };
+export default pool;

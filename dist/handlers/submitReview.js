@@ -10,12 +10,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.submitReviewHandler = submitReviewHandler;
-const pg_1 = require("pg");
 const db_config_1 = require("../config/db.config");
 const user_service_1 = require("../services/user.service");
 const booking_service_1 = require("../services/booking.service");
 const review_service_1 = require("../services/review.service");
-const pool = new pg_1.Pool(db_config_1.dbConfig);
+const pool = db_config_1.dbConfig.pool;
 const userService = new user_service_1.UserService(pool);
 const bookingService = new booking_service_1.BookingService(pool);
 const reviewService = new review_service_1.ReviewService(pool);
