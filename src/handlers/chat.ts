@@ -6,7 +6,7 @@ import { UserService } from '../services/user.service';
 import { ConnectionService } from '../services/connection.service';
 import { ChatService } from '../services/chat.service';
 
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 const userService = new UserService(pool);
 const connectionService = new ConnectionService(pool);
 const chatService = new ChatService(pool);

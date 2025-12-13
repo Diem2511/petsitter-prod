@@ -5,7 +5,7 @@ import { dbConfig } from '../config/db.config';
 import { UserService } from '../services/user.service';
 import { PaymentService } from '../services/payment.service';
 
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 const userService = new UserService(pool);
 const paymentService = new PaymentService(pool);
 

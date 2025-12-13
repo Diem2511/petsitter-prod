@@ -4,7 +4,7 @@ import { dbConfig } from '../config/db.config';
 import { GeoService } from '../services/geo.service';
 import { UserService } from '../services/user.service'; // Para validación JWT
 
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 const geoService = new GeoService();
 const userService = new UserService(pool);
 

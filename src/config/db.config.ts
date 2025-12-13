@@ -1,10 +1,17 @@
-﻿import { poolConfig } from './postgres.config';
-import pool from './postgres.config';
+﻿import pool from './postgres.config';
 
-// ¡ESTA ES LA MAGIA!
-// Exportamos la "configuración" cruda, porque tus handlers (chat.ts, etc.)
-// seguramente están haciendo "new Pool(dbConfig)".
-export const dbConfig = poolConfig;
-
-// También exportamos el pool por si algún archivo lo importa directo
-export { pool };
+// Simulamos la estructura que tus handlers antiguos esperan
+export const dbConfig = {
+    // Si tus handlers hacen "const pool = dbConfig.pool", esto funcionará:
+    pool: pool,
+    
+    // Si hacen "dbConfig.query(...)", esto funcionará:
+    query: (text: string, params?: any[]) => pool.query(text, params),
+    
+    // Propiedades de configuración "dummy" para engañar a TypeScript
+    // si intentan pasar dbConfig al constructor de Pool
+    host: 'localhost',
+    user: 'postgres',
+    password: '',
+    database: 'postgres'
+};

@@ -5,7 +5,7 @@ import { UserService } from '../services/user.service';
 import { BookingService } from '../services/booking.service';
 import { ReviewService } from '../services/review.service';
 
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 const userService = new UserService(pool);
 const bookingService = new BookingService(pool);
 const reviewService = new ReviewService(pool);

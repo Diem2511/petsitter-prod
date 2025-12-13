@@ -4,7 +4,7 @@ import { SitterService } from '../services/sitter.service';
 import { dbConfig } from '../config/db.config';
 
 // Inicialización de la pool de PostgreSQL
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 const sitterService = new SitterService(pool);
 
 /**

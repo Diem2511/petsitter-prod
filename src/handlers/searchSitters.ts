@@ -8,7 +8,7 @@ import { IcvService } from '../services/icv.service';
 import { ReviewService } from '../services/review.service';
 import { Neo4jService } from '../services/neo4j.service';
 
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 const userService = new UserService(pool);
 
 // 1. Instanciamos dependencias en orden correcto

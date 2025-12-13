@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { dbConfig } from '../config/db.config';
 import { haversineDistance } from '../services/geo.service';
 
-const pool = new Pool(dbConfig);
+const pool = dbConfig.pool;
 
 export const searchHandler: APIGatewayProxyHandler = async (event) => {
     try {
