@@ -2,8 +2,8 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-// Asegúrate de que este archivo exista, si no, comenta esta línea temporalmente
-import { healthCheck } from './handlers/healthCheck';
+// Si tienes el handler de healthCheck, descoméntalo, si no, usa el inline de abajo
+// import { healthCheck } from './handlers/healthCheck'; 
 
 dotenv.config();
 
@@ -11,128 +11,104 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// 1. CONFIGURACIÓN DE CONEXIÓN A DB (CRÍTICO)
+// 1. CONFIGURACIÓN DE CONEXIÓN A DB (BLINDADA)
 // =========================================================================
 
-const connectionString = process.env.DATABASE_URL;
+let connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
     console.error('❌ ERROR CRÍTICO: La variable DATABASE_URL no está definida.');
     process.exit(1);
 }
 
+// TRUCO DE MAGIA: Limpiamos la URL para evitar conflictos
+// Si la URL viene con '?sslmode=require', lo quitamos para que mande nuestro objeto config
+if (connectionString.includes('?')) {
+    console.log('🧹 Limpiando parámetros conflictivos de DATABASE_URL...');
+    connectionString = connectionString.split('?')[0]; 
+}
+
 const pool = new Pool({
     connectionString: connectionString,
-    ssl: {
-        rejectUnauthorized: false
-    },
+    // AQUÍ ESTÁ LA SOLUCIÓN AL ERROR "SELF-SIGNED CERTIFICATE"
+    ssl: { 
+        rejectUnauthorized: false // <--- ESTO ES LO QUE SUPABASE NECESITA
+    }, 
     connectionTimeoutMillis: 10000
 });
 
 console.log('🚀 Iniciando PetSitter Backend...');
-console.log('🔗 Conectando a Supabase vía DATABASE_URL...');
-
 
 // =========================================================================
-// 2. MIDDLEWARE BÁSICO
+// 2. MIDDLEWARE
 // =========================================================================
 const allowedOrigins = [
-    process.env.FRONTEND_URL_DEV || 'http://localhost:5173',
-    process.env.FRONTEND_URL_PROD
+    process.env.FRONTEND_URL_DEV || 'http://localhost:5173', 
+    process.env.FRONTEND_URL_PROD 
 ];
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Permitir peticiones sin origen (ej: Postman, Render Health Checks)
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
             callback(null, true);
         } else {
-            callback(null, true); // Permitir temporalmente todo para debug si falla
+            console.log('⚠️ Bloqueo CORS para origen:', origin);
+            callback(null, true); // Modo permisivo temporal para evitar bloqueos en pruebas
         }
     },
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true
 }));
 
 app.use(express.json());
 
+// =========================================================================
+// 3. ENDPOINTS
+// =========================================================================
 
-// =========================================================================
-// 3. ENDPOINT DE PRUEBA DE BASE DE DATOS (CRÍTICO)
-// =========================================================================
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
-        const result = await pool.query('SELECT NOW() as hora, version() as version');
+        const result = await pool.query('SELECT NOW() as hora, version() as version'); 
         res.json({
             success: true,
-            message: '✅ ¡Conexión a la base de datos exitosa!',
+            message: '✅ ¡CONEXIÓN DB EXITOSA!',
             data: {
-                hora_servidor: result.rows[0].hora,
-                version_postgres: result.rows[0].version.split('\n')[0]
+                hora: result.rows[0].hora,
+                version: result.rows[0].version
             }
         });
     } catch (error: any) {
-        console.error('❌ Error en /api/test-db:', error.message);
-        res.status(503).json({
+        console.error('❌ Error test-db:', error.message);
+        res.status(500).json({
             success: false,
             error: error.message,
-            host_intentado: process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'Desconocido',
-            solucion: 'Error de BD. Verifica DATABASE_URL en Render.'
+            hint: 'El error self-signed certificate se arregla con rejectUnauthorized: false'
         });
     }
 });
 
-
-// =========================================================================
-// 4. HEALTH CHECK (Completo)
-// =========================================================================
-// Si healthCheck no existe, usa una función simple inline para que no falle el build
+// Health check simple y robusto
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+    res.json({ status: 'ok', service: 'petsitter-backend', timestamp: new Date() });
 });
 
-
-// =========================================================================
-// 5. RUTA RAIZ
-// =========================================================================
-app.get('/', (req: Request, res: Response) => {
-    res.json({
-        message: 'API de PetSitter Backend - Operacional',
-        version: '1.0.0',
-        endpoints: {
-            test_db: '/api/test-db',
-            health: '/api/health',
-            login: '/api/auth/login'
-        }
-    });
+app.get('/', (req, res) => {
+    res.json({ message: 'PetSitter Backend Online 🚀' });
 });
 
-
 // =========================================================================
-// 6. INICIO DEL SERVIDOR
+// 4. ARRANQUE
 // =========================================================================
 const startServer = async () => {
-    // Prueba de conexión CRÍTICA con mejor manejo de SSL
     try {
-        const testResult = await pool.query('SELECT 1 as test, NOW() as time');
-        console.log('✅ Prueba de conexión a PostgreSQL exitosa.');
-        console.log('   Hora del servidor DB:', testResult.rows[0].time);
+        await pool.query('SELECT 1');
+        console.log('✅ CONEXIÓN INICIAL A BASE DE DATOS: EXITOSA');
     } catch (error: any) {
-        console.error('❌ ERROR CRÍTICO: No se pudo conectar a la base de datos.');
-        console.error('      Continuando el arranque para debug/diagnóstico...');
-        console.error('      Motivo:', error.message);
-        
-        // Log adicional para SSL
-        if (error.message.includes('certificate')) {
-            console.error('      💡 Problema de certificado SSL detectado.');
-            console.error('      DATABASE_URL debe usar pooler.supabase.com con puerto 6543');
-        }
+        console.error('❌ ERROR CONEXIÓN INICIAL DB:', error.message);
+        // No hacemos process.exit(1) para que el servidor web siga vivo y podamos diagnosticar
     }
 
-    // Lanzamos el servidor
     app.listen(PORT, () => {
-        console.log(`📡 Servidor escuchando en el puerto ${PORT}`);
-        console.log(`🌐 URL pública: https://petsitter-prod.onrender.com`);
+        console.log(`📡 Backend escuchando en puerto ${PORT}`);
     });
 };
 
