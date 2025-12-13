@@ -3,7 +3,7 @@ import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 // Asegúrate de que este archivo exista, si no, comenta esta línea temporalmente
-import { healthCheck } from './handlers/healthCheck'; 
+import { healthCheck } from './handlers/healthCheck';
 
 dotenv.config();
 
@@ -23,12 +23,9 @@ if (!connectionString) {
 
 const pool = new Pool({
     connectionString: connectionString,
-    // SOLUCIÓN AL ERROR DE TYPESCRIPT:
-    // Solo usamos rejectUnauthorized. La propiedad 'require' no existe en los tipos de @types/pg
-    // pero la conexión SSL se fuerza igual mediante la URL (sslmode=require)
-    ssl: { 
+    ssl: {
         rejectUnauthorized: false
-    }, 
+    },
     connectionTimeoutMillis: 10000
 });
 
@@ -40,8 +37,8 @@ console.log('🔗 Conectando a Supabase vía DATABASE_URL...');
 // 2. MIDDLEWARE BÁSICO
 // =========================================================================
 const allowedOrigins = [
-    process.env.FRONTEND_URL_DEV || 'http://localhost:5173', 
-    process.env.FRONTEND_URL_PROD 
+    process.env.FRONTEND_URL_DEV || 'http://localhost:5173',
+    process.env.FRONTEND_URL_PROD
 ];
 
 app.use(cors({
@@ -65,7 +62,7 @@ app.use(express.json());
 // =========================================================================
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
-        const result = await pool.query('SELECT NOW() as hora, version() as version'); 
+        const result = await pool.query('SELECT NOW() as hora, version() as version');
         res.json({
             success: true,
             message: '✅ ¡Conexión a la base de datos exitosa!',
@@ -115,14 +112,21 @@ app.get('/', (req: Request, res: Response) => {
 // 6. INICIO DEL SERVIDOR
 // =========================================================================
 const startServer = async () => {
-    // Prueba de conexión CRÍTICA
+    // Prueba de conexión CRÍTICA con mejor manejo de SSL
     try {
-        await pool.query('SELECT 1');
+        const testResult = await pool.query('SELECT 1 as test, NOW() as time');
         console.log('✅ Prueba de conexión a PostgreSQL exitosa.');
+        console.log('   Hora del servidor DB:', testResult.rows[0].time);
     } catch (error: any) {
         console.error('❌ ERROR CRÍTICO: No se pudo conectar a la base de datos.');
+        console.error('      Continuando el arranque para debug/diagnóstico...');
         console.error('      Motivo:', error.message);
-        console.log('      Continuando el arranque para debug/diagnóstico...');
+        
+        // Log adicional para SSL
+        if (error.message.includes('certificate')) {
+            console.error('      💡 Problema de certificado SSL detectado.');
+            console.error('      DATABASE_URL debe usar pooler.supabase.com con puerto 6543');
+        }
     }
 
     // Lanzamos el servidor
