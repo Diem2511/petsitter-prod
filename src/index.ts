@@ -3,108 +3,79 @@ import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
-// Cargo el entorno antes que nada.
 dotenv.config();
 
-// === BYPASS CRÍTICO DE CERTIFICADOS A NIVEL DE STACK ===
-// Esto ignora el error de 'self-signed certificate' en todo el proceso Node.js.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
-
 const app = express();
-const PORT = process.env.PORT || 10000;
+// Vercel maneja el puerto internamente, pero mantenemos esto para desarrollo local
+const PORT = process.env.PORT || 3000; 
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: HOSTNAME DEFINITIVO (USO DE GUION)
+// CONFIGURACIÓN NEON (LIMPIA Y SIMPLE)
 // =========================================================================
-let connectionString = process.env.DATABASE_URL;
+
+const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-    console.error('❌ FATAL: Falta DATABASE_URL.');
-    process.exit(1);
+    throw new Error('❌ FATAL: DATABASE_URL no definida');
 }
-
-// 1. ANULACIÓN DEL POOLER: Reemplaza el puerto 6543 (Pooler) por 5432 (Motor Directo)
-let finalConnectionString = connectionString.replace(':6543', ':5432');
-
-// 2. Extraer el host actual
-const hostMatch = finalConnectionString.match(/@(.+?):/);
-
-if (hostMatch && hostMatch[1]) {
-    let currentHost = hostMatch[1];
-    
-    // Extraer el Project ID
-    const projectIdMatch = finalConnectionString.match(/postgres\.([a-z0-9]+)/);
-    let projectId = projectIdMatch && projectIdMatch[1] ? projectIdMatch[1] : '';
-
-    if (projectId) {
-        // CORRECCIÓN FINAL: Cambiamos el subdominio complejo a la forma genérica de Supabase:
-        // project-db.region.supabase.co
-        let newHost = currentHost
-            .replace('.pooler.', '.') // Limpiamos 'pooler'
-            .replace('.db.', '.');    // Limpiamos '.db' si existe
-        
-        // Buscamos el inicio de la región (ej: aws-0-sa-east-1)
-        let regionIndex = newHost.indexOf('aws-0');
-        if (regionIndex === -1) regionIndex = newHost.indexOf('db-'); // Otra convención
-        
-        if (regionIndex > 0) {
-            // Reconstruimos: quitamos el ID original y lo ponemos con el sufijo '-db'
-            let regionPart = newHost.substring(regionIndex);
-            newHost = `${projectId}-db.${regionPart}`;
-        } else {
-             // Fallback a la reconstrucción anterior si no se encuentra la región
-             newHost = currentHost.replace('.pooler.supabase.com', '.db.supabase.com').replace('.db.', '.');
-        }
-
-        // Reemplazamos el host en la cadena
-        finalConnectionString = finalConnectionString.replace(currentHost, newHost);
-    }
-}
-
-// 3. Limpiamos 'sslmode' y 'query string' remanente
-finalConnectionString = finalConnectionString.replace('sslmode=require', '').split('?')[0];
 
 const pool = new Pool({
-    connectionString: finalConnectionString, 
-    ssl: { 
-        rejectUnauthorized: false
-    },
-    connectionTimeoutMillis: 10000
+    connectionString: connectionString,
+    ssl: true, // Neon tiene certificados reales, esto es suficiente y seguro
+    connectionTimeoutMillis: 5000 // Serverless debe ser rápido
 });
 
-console.log('🚀 Iniciando Backend (MODO DE ÚLTIMA CORRECCIÓN DE HOSTNAME)...');
+console.log('🚀 Inicializando Backend en entorno Serverless...');
 
 // =========================================================================
-// MIDDLEWARE Y RUTAS (el resto del código sigue igual)
+// MIDDLEWARE
 // =========================================================================
-app.use(cors({ origin: '*', credentials: true }));
+
+app.use(cors({
+    origin: '*', // Ajusta esto según necesites para tu frontend
+    credentials: true
+}));
+
 app.use(express.json());
+
+// =========================================================================
+// RUTAS
+// =========================================================================
 
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
-        const result = await pool.query('SELECT NOW() as hora'); 
+        const result = await pool.query('SELECT NOW() as hora, version()'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! ¡EL CANAL DE DATOS ESTÁ ABIERTO!',
+            provider: 'Neon Serverless Postgres',
             hora: result.rows[0].hora,
-            connectionStringUsed: finalConnectionString 
+            version: result.rows[0].version
         });
     } catch (error: any) {
-        console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
-        res.status(500).json({ success: false, error: error.message, connectionStringUsed: finalConnectionString });
+        console.error('❌ Error Neon:', error.message);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ready to deploy', timestamp: new Date() });
+    res.json({ status: 'ok', platform: 'Vercel + Neon', timestamp: new Date() });
 });
 
 app.get('/', (req, res) => {
-    res.json({ message: 'PetSitter Backend: Canales Abiertos' });
+    res.json({ message: 'PetSitter Backend en Vercel 🚀' });
 });
 
-app.listen(PORT, () => {
-    console.log(`📡 Escuchando en puerto ${PORT}`);
-});
+// =========================================================================
+// ADAPTADOR VERCEL (CRÍTICO)
+// =========================================================================
 
+// Vercel requiere que EXPORTEMOS la app, no que hagamos app.listen()
+// Solo hacemos listen si estamos en local
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`📡 Servidor local corriendo en http://localhost:${PORT}`);
+    });
+}
+
+// Esta exportación es lo que Vercel busca para convertirlo en Serverless Function
 export default app;
