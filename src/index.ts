@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: HOSTNAME DEFINITIVO (INCLUSIÓN DE '.db')
+// CONFIGURACIÓN DE CONEXIÓN: HOSTNAME DEFINITIVO (USO DE GUION)
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
@@ -26,22 +26,42 @@ if (!connectionString) {
 // 1. ANULACIÓN DEL POOLER: Reemplaza el puerto 6543 (Pooler) por 5432 (Motor Directo)
 let finalConnectionString = connectionString.replace(':6543', ':5432');
 
-// 2. Extraer el host actual (que aún tiene '.pooler')
+// 2. Extraer el host actual
 const hostMatch = finalConnectionString.match(/@(.+?):/);
 
 if (hostMatch && hostMatch[1]) {
     let currentHost = hostMatch[1];
     
-    // 3. ¡CORRECCIÓN FINAL! Cambiamos '.pooler.supabase.com' a '.db.supabase.co' (o .com)
-    // Esto fuerza la estructura del motor de DB directo que la Corporación usa:
-    // <ProjectRef>.<Region>.db.supabase.com
-    let newHost = currentHost.replace('.pooler.', '.db.'); 
+    // Extraer el Project ID
+    const projectIdMatch = finalConnectionString.match(/postgres\.([a-z0-9]+)/);
+    let projectId = projectIdMatch && projectIdMatch[1] ? projectIdMatch[1] : '';
 
-    // Reemplaza el host completo en la cadena de conexión
-    finalConnectionString = finalConnectionString.replace(currentHost, newHost);
+    if (projectId) {
+        // CORRECCIÓN FINAL: Cambiamos el subdominio complejo a la forma genérica de Supabase:
+        // project-db.region.supabase.co
+        let newHost = currentHost
+            .replace('.pooler.', '.') // Limpiamos 'pooler'
+            .replace('.db.', '.');    // Limpiamos '.db' si existe
+        
+        // Buscamos el inicio de la región (ej: aws-0-sa-east-1)
+        let regionIndex = newHost.indexOf('aws-0');
+        if (regionIndex === -1) regionIndex = newHost.indexOf('db-'); // Otra convención
+        
+        if (regionIndex > 0) {
+            // Reconstruimos: quitamos el ID original y lo ponemos con el sufijo '-db'
+            let regionPart = newHost.substring(regionIndex);
+            newHost = `${projectId}-db.${regionPart}`;
+        } else {
+             // Fallback a la reconstrucción anterior si no se encuentra la región
+             newHost = currentHost.replace('.pooler.supabase.com', '.db.supabase.com').replace('.db.', '.');
+        }
+
+        // Reemplazamos el host en la cadena
+        finalConnectionString = finalConnectionString.replace(currentHost, newHost);
+    }
 }
 
-// 4. Limpiamos 'sslmode' y 'query string' remanente
+// 3. Limpiamos 'sslmode' y 'query string' remanente
 finalConnectionString = finalConnectionString.replace('sslmode=require', '').split('?')[0];
 
 const pool = new Pool({
@@ -52,19 +72,14 @@ const pool = new Pool({
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO ACCESO DIRECTO Y CORRECCIÓN DE HOSTNAME FINAL)...');
+console.log('🚀 Iniciando Backend (MODO DE ÚLTIMA CORRECCIÓN DE HOSTNAME)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS (el resto del código sigue igual)
 // =========================================================================
-app.use(cors({
-    origin: '*', 
-    credentials: true
-}));
-
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
-// Ruta CLAVE: Verificación de acceso.
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
         const result = await pool.query('SELECT NOW() as hora'); 
