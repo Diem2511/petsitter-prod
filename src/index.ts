@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-// import { healthCheck } from './handlers/healthCheck'; // Descomenta si existe
+// import { healthCheck } from './handlers/healthCheck';
 
 dotenv.config();
 
@@ -10,33 +10,41 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// 1. CONFIGURACIÓN DE CONEXIÓN A DB (MODO IPv4 FORZADO)
+// 1. CONFIGURACIÓN DE CONEXIÓN HÍBRIDA (SNI FIX)
 // =========================================================================
+
+// Datos extraídos de tus logs anteriores
+const SUPABASE_HOST = 'db.qzgdviycwxzmvwtazkis.supabase.co';
+const SUPABASE_IP = '54.232.77.43'; // La IP que vimos en tus logs
 
 let connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-    console.error('❌ ERROR CRÍTICO: La variable DATABASE_URL no está definida.');
+    console.error('❌ ERROR CRÍTICO: DATABASE_URL faltante.');
     process.exit(1);
 }
 
-// Limpiamos la URL por si acaso
-if (connectionString.includes('?')) {
-    connectionString = connectionString.split('?')[0];
+// TRUCO DE MAGIA:
+// Reemplazamos el dominio por la IP en la cadena de conexión para evitar el DNS de Render
+// PERO guardamos el dominio para el certificado SSL
+if (connectionString.includes(SUPABASE_HOST)) {
+    console.log('🔧 Aplicando parche SNI: Usando IP directa con Hostname en SSL');
+    connectionString = connectionString.replace(SUPABASE_HOST, SUPABASE_IP);
 }
 
 const pool = new Pool({
     connectionString: connectionString,
     ssl: { 
-        rejectUnauthorized: false 
+        rejectUnauthorized: false,
+        // ESTA ES LA CLAVE DEL ÉXITO:
+        // Aunque nos conectamos a la IP 54.232..., le decimos a Supabase
+        // "Hola, vengo a ver a db.qzgdviycwx..."
+        servername: SUPABASE_HOST 
     },
-    connectionTimeoutMillis: 10000,
-    // 🔥 ESTA ES LA LÍNEA MÁGICA QUE FALTABA 🔥
-    // @ts-ignore <--- Esto calla a TypeScript
-    family: 4,     // <--- Esto obliga a Node.js a usar solo IPv4
+    connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando PetSitter Backend (Modo IPv4 Estricto)...');
+console.log('🚀 Iniciando PetSitter Backend (Modo SNI)...');
 
 // =========================================================================
 // 2. MIDDLEWARE
@@ -51,7 +59,7 @@ app.use(cors({
         if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
             callback(null, true);
         } else {
-            callback(null, true); 
+            callback(null, true);
         }
     },
     credentials: true
@@ -68,7 +76,7 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         const result = await pool.query('SELECT NOW() as hora, version() as version'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN EXITOSA! (IPv4 + Dominio)',
+            message: '✅ ¡CONEXIÓN EXITOSA! (Parche SNI funcionando)',
             data: {
                 hora: result.rows[0].hora,
                 version: result.rows[0].version
@@ -76,10 +84,7 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error('❌ Error test-db:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -97,11 +102,10 @@ app.get('/', (req, res) => {
 const startServer = async () => {
     try {
         await pool.query('SELECT 1');
-        console.log('✅ CONEXIÓN INICIAL A BASE DE DATOS: EXITOSA');
+        console.log('✅ CONEXIÓN INICIAL EXITOSA');
     } catch (error: any) {
         console.error('❌ ERROR CONEXIÓN INICIAL:', error.message);
     }
-
     app.listen(PORT, () => {
         console.log(`📡 Backend escuchando en puerto ${PORT}`);
     });
