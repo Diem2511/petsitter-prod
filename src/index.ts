@@ -1,8 +1,8 @@
-import express, { Request, Response } from 'express'; // Añadido Response, Request para tipos
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-// Importa el handler de verificación que hicimos antes
+// Importa el handler de verificación (asume que existe)
 import { healthCheck } from './handlers/healthCheck'; 
 
 dotenv.config();
@@ -11,22 +11,25 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// 1. CORRECCIÓN CRÍTICA: USAR VARIABLE DE ENTORNO 'DATABASE_URL' de RENDER
+// 1. CONFIGURACIÓN DE CONEXIÓN A DB (CRÍTICO)
 // =========================================================================
 
-// Usaremos la variable de entorno DATABASE_URL que configuraste en Render.
-// Nota: Para este test inicial, usaremos la URI del pooler que ya has configurado.
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
     console.error('❌ ERROR CRÍTICO: La variable DATABASE_URL no está definida.');
-    process.exit(1); // Finaliza si la variable más crítica no está presente.
+    process.exit(1);
 }
 
 const pool = new Pool({
     connectionString: connectionString,
-    // La conexión a Supabase SIEMPRE requiere SSL
-    ssl: { rejectUnauthorized: false }, 
+    // SOLUCIÓN FINAL AL PROBLEMA DE CERTIFICADO (self-signed certificate)
+    // rejectUnauthorized: false ignora la validación.
+    // require: true asegura que la conexión SSL se establece (obligatorio con IP).
+    ssl: { 
+        rejectUnauthorized: false, 
+        require: true 
+    }, 
     connectionTimeoutMillis: 10000
 });
 
@@ -34,16 +37,17 @@ console.log('🚀 Iniciando PetSitter Backend...');
 console.log('🔗 Conectando a Supabase vía DATABASE_URL...');
 
 
+// =========================================================================
 // 2. MIDDLEWARE BÁSICO
-// CORRECCIÓN: Usaremos una configuración CORS para producción (usa las variables de entorno)
+// =========================================================================
 const allowedOrigins = [
-    process.env.FRONTEND_URL_DEV, // http://localhost:3000
-    process.env.FRONTEND_URL_PROD // https://dominio-final.com
+    process.env.FRONTEND_URL_DEV, 
+    process.env.FRONTEND_URL_PROD 
 ];
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Permitir peticiones sin origen (como Postman/cURL/Deploy Preview)
+        // Permitir peticiones sin origen (ej: Postman, Render Health Checks)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -56,10 +60,12 @@ app.use(cors({
 
 app.use(express.json());
 
+
+// =========================================================================
 // 3. ENDPOINT DE PRUEBA DE BASE DE DATOS (CRÍTICO)
+// =========================================================================
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
-        // Testeamos la conexión y el pool
         const result = await pool.query('SELECT NOW() as hora, version() as version'); 
         res.json({
             success: true,
@@ -71,22 +77,25 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error('❌ Error en /api/test-db:', error.message);
-        res.status(503).json({ // Usar 503 Service Unavailable
+        res.status(503).json({
             success: false,
             error: error.message,
             host_intentado: process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'Desconocido',
-            solucion: 'Verifica la contraseña en la variable DATABASE_URL y que el pooler de Supabase esté activo.'
+            solucion: 'Error de BD. Si el error es ENETUNREACH/Certificado, la IP en DATABASE_URL es incorrecta o no se pudo ignorar el certificado.'
         });
     }
 });
 
+
+// =========================================================================
 // 4. HEALTH CHECK (Completo)
-// Este endpoint debe llamar al script de verificación que hicimos antes.
-// Si ya tienes un archivo handlers/healthCheck.ts, usa ese.
-// Si no lo has creado, usaremos la versión simplificada de tu código anterior.
+// =========================================================================
 app.get('/api/health', healthCheck); 
 
+
+// =========================================================================
 // 5. RUTA RAIZ
+// =========================================================================
 app.get('/', (req: Request, res: Response) => {
     res.json({
         message: 'API de PetSitter Backend - Operacional',
@@ -94,14 +103,18 @@ app.get('/', (req: Request, res: Response) => {
         endpoints: {
             test_db: '/api/test-db',
             health: '/api/health',
-            login: '/api/auth/login' // Asumiendo tu primera ruta funcional
+            // Añade más rutas a medida que las implementes
+            login: '/api/auth/login'
         }
     });
 });
 
+
+// =========================================================================
 // 6. INICIO DEL SERVIDOR
+// =========================================================================
 const startServer = async () => {
-    // Prueba de conexión CRÍTICA antes de escuchar
+    // Prueba de conexión CRÍTICA
     try {
         await pool.query('SELECT 1');
         console.log('✅ Prueba de conexión a PostgreSQL exitosa.');
@@ -115,8 +128,6 @@ const startServer = async () => {
     app.listen(PORT, () => {
         console.log(`📡 Servidor escuchando en el puerto ${PORT}`);
         console.log(`🌐 URL pública: https://petsitter-prod.onrender.com`);
-        console.log(`🩺 Health check (DB + S3): https://petsitter-prod.onrender.com/api/health`);
-        console.log(`🔧 Prueba de BD: https://petsitter-prod.onrender.com/api/test-db`);
     });
 };
 
