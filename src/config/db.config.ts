@@ -3,26 +3,25 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// 1. Definimos la configuración que tanto Supabase como tus archivos necesitan
+// Configuración de conexión con el FIX para certificado auto-firmado
 const connectionConfig = {
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false // <--- ESTO ES LO QUE SOLUCIONA EL ERROR "SELF-SIGNED CERTIFICATE"
     }
 };
 
-// 2. ¡ESTA ES LA LÍNEA QUE FALTABA!
-// Tus otros archivos importan "dbConfig", así que se lo devolvemos.
+// 1. Exportamos la configuración (necesario para que los handlers no den error de compilación)
 export const dbConfig = connectionConfig;
 
-// 3. Creamos y exportamos la pool
+// 2. Exportamos la pool (necesario para las consultas a la base de datos)
 export const pool = new Pool(connectionConfig);
 
-// 4. Logs de diagnóstico (opcional, pero útil)
+// Logs para monitorear la salud de la conexión
 pool.on('connect', () => {
-    console.log('✅ DB: Cliente conectado al pool');
+    console.log('✅ DB: Conexión establecida con el Pool');
 });
 
 pool.on('error', (err) => {
-    console.error('❌ DB: Error inesperado en cliente inactivo', err);
+    console.error('❌ DB: Error inesperado en el Pool:', err);
 });
