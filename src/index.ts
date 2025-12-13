@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: ATAQUE DE REDIRECCIÓN DE PUERTO (BYPASS DE POOLER)
+// CONFIGURACIÓN DE CONEXIÓN: CORRECCIÓN DE HOSTNAME FINAL (5432)
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
@@ -26,28 +26,28 @@ if (!connectionString) {
 // 1. ANULACIÓN DEL POOLER: Reemplaza el puerto 6543 (Pooler) por 5432 (Motor Directo)
 let finalConnectionString = connectionString.replace(':6543', ':5432');
 
-// 2. Quitamos cualquier 'sslmode=require' del string, ya que el motor directo lo maneja mejor
-// con el objeto 'ssl' de 'pg' y no necesitamos la ofuscación del Pooler.
+// 2. Quitamos cualquier 'sslmode=require' del string
 if (finalConnectionString.includes('sslmode=require')) {
     finalConnectionString = finalConnectionString.replace('sslmode=require', '');
 }
 
-// 3. Anulamos el dominio 'pooler' por el dominio directo si está presente
-finalConnectionString = finalConnectionString.replace('.pooler.supabase.com', '.supabase.co');
+// 3. Limpiamos el subdominio 'pooler' si está presente, PERO CON MÁS CUIDADO.
+// Solo quitamos '.pooler' para dejar el subdominio correcto (e.g., 'aws-0-sa-east-1.supabase.co')
+finalConnectionString = finalConnectionString.replace('.pooler.', '.');
 
 
-// 4. Limpiamos cualquier query string remanente, ya que el motor directo la ignora
+// 4. Limpiamos cualquier query string remanente (incluyendo el 'options=...')
 finalConnectionString = finalConnectionString.split('?')[0]; 
 
 const pool = new Pool({
-    connectionString: finalConnectionString, // ¡Usamos la cadena sin Pooler!
+    connectionString: finalConnectionString, 
     ssl: { 
-        rejectUnauthorized: false // Ignora el certificado auto-firmado
+        rejectUnauthorized: false
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO DE REDIRECCIÓN Y BYPASS DE POOLER TÁCTICO)...');
+console.log('🚀 Iniciando Backend (MODO ACCESO DIRECTO Y CORRECCIÓN DE DNS)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS
@@ -59,13 +59,13 @@ app.use(cors({
 
 app.use(express.json());
 
-// Ruta CLAVE: Verificación de acceso al motor directo.
+// Ruta CLAVE: Verificación de acceso.
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Acceso directo al motor Postgres.',
+            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! El canal está libre para la subversión.',
             hora: result.rows[0].hora,
             connectionStringUsed: finalConnectionString 
         });
