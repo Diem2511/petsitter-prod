@@ -3,14 +3,14 @@ import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
-// Cargo el entorno antes que nada, como debe ser.
+// Cargo el entorno antes que nada.
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN AVANZADA DE CONEXIÓN (IGNORANDO RESTRICCIONES DE POOLER)
+// CONFIGURACIÓN DE CONEXIÓN: ATAQUE DE INYECCIÓN DE OPTIONS (Solución Forzada)
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
@@ -19,32 +19,41 @@ if (!connectionString) {
     process.exit(1);
 }
 
-// === ELIMINACIÓN INTELIGENTE DE PARÁMETROS ===
-// Mantengo la query string si existe (e.g., ?options=project_id) porque el Pooler la NECESITA.
-// Solo quito 'sslmode=require' del string para evitar redundancia y conflictos 
-// ya que el objeto 'ssl' de 'pg' ya lo maneja. Esto es un parche que yo diseñé.
-if (connectionString.includes('sslmode=require')) {
-    connectionString = connectionString.replace('sslmode=require', '');
+// 1. Obtener la cadena de conexión limpia (sin la query string si la tuviera, Render la elimina)
+const cleanConnectionUrl = connectionString.split('?')[0];
+
+// 2. Extraer el Project Reference ID del nombre de usuario para inyectarlo.
+// Esto usa RegEx para encontrar 'postgres.PROYECTO_ID'
+const userPart = cleanConnectionUrl.split('//')[1].split(':')[0];
+const projectIdMatch = userPart.match(/^postgres\.([a-z0-9]+)/);
+
+let finalConnectionString = cleanConnectionUrl;
+
+if (projectIdMatch && projectIdMatch[1]) {
+    const projectId = projectIdMatch[1];
+    // 3. Inyectar la Query String crítica (?options=project-id) al final.
+    // Usamos %3D por precaución. Esto es lo que el Pooler necesita.
+    finalConnectionString = `${cleanConnectionUrl}?options=project-id%3D${projectId}`; 
+    console.log(`✅ Project ID [${projectId}] detectado e inyectado forzosamente. Cadena finalizada.`);
+} else {
+    // Si la estructura del username es diferente a 'postgres.ID', esto fallará.
+    console.error('❌ ERROR CLASIFICADO: No se pudo parsear el Project ID para la inyección. Revisa el formato de la URL.');
+    process.exit(1);
 }
 
-// Ahora, asegúrate de que no queden '?' colgantes o '&' iniciales después de la limpieza.
-connectionString = connectionString.replace(/\?&/g, '?').replace(/&&/g, '&');
-if (connectionString.endsWith('?')) {
-    connectionString = connectionString.slice(0, -1);
-}
-
+// 4. Crear el Pool con la cadena de conexión inyectada.
 const pool = new Pool({
-    connectionString: connectionString, 
+    connectionString: finalConnectionString, 
     ssl: { 
-        rejectUnauthorized: false // Ignora la verificación de certificado, bypass clave en Render/Supabase.
+        rejectUnauthorized: false // Bypassing SSL check.
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO SUBVERSIÓN TÁCTICA)...');
+console.log('🚀 Iniciando Backend (MODO INYECCIÓN FORZADA DE TENANT ID)...');
 
 // =========================================================================
-// MIDDLEWARE Y RUTAS DE PRUEBA (Para verificar el acceso)
+// MIDDLEWARE Y RUTAS
 // =========================================================================
 app.use(cors({
     origin: '*', 
@@ -53,20 +62,19 @@ app.use(cors({
 
 app.use(express.json());
 
-// Ruta CLAVE: Si funciona, el Pooler fue evadido.
+// Ruta CLAVE: Verificación de acceso al Pooler.
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
-        // Consulta simple y directa. Si esto pasa, el canal de datos está abierto.
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Pooler neutralizado.',
+            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Pooler neutralizado por Inyección.',
             hora: result.rows[0].hora,
-            connectionStringUsed: connectionString // EXPOSICIÓN de la cadena (solo para debug/prueba)
+            connectionStringUsed: finalConnectionString // Para verificación.
         });
     } catch (error: any) {
         console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
-        res.status(500).json({ success: false, error: error.message, connectionStringUsed: connectionString });
+        res.status(500).json({ success: false, error: error.message, connectionStringUsed: finalConnectionString });
     }
 });
 
