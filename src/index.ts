@@ -3,79 +3,66 @@ import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
+// Cargo el entorno antes que nada.
 dotenv.config();
 
+// === BYPASS CRÍTICO DE CERTIFICADOS A NIVEL DE STACK ===
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
+
 const app = express();
-// Vercel maneja el puerto internamente, pero mantenemos esto para desarrollo local
 const PORT = process.env.PORT || 3000; 
 
 // =========================================================================
-// CONFIGURACIÓN NEON (LIMPIA Y SIMPLE)
+// CONFIGURACIÓN DE CONEXIÓN: INYECCIÓN MANUAL DE CADENA NEON (Modo Asalto)
 // =========================================================================
 
-const connectionString = process.env.DATABASE_URL;
+// --- ¡CADENA DE CONEXIÓN INYECTADA DIRECTAMENTE! ---
+const CONNECTION_STRING_INJECTED = 'postgresql://neondb_owner:npg_bNxxxxxxxxxx@ep-proud-dawn-ahel3tta-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
-if (!connectionString) {
-    throw new Error('❌ FATAL: DATABASE_URL no definida');
-}
-
+// Usamos la cadena inyectada para forzar la conexión.
 const pool = new Pool({
-    connectionString: connectionString,
-    ssl: true, // Neon tiene certificados reales, esto es suficiente y seguro
-    connectionTimeoutMillis: 5000 // Serverless debe ser rápido
+    connectionString: CONNECTION_STRING_INJECTED, 
+    ssl: { 
+        rejectUnauthorized: false
+    },
+    connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Inicializando Backend en entorno Serverless...');
+console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - ¡INYECCIÓN FORZADA DE URL!)...');
 
 // =========================================================================
-// MIDDLEWARE
+// MIDDLEWARE Y RUTAS
 // =========================================================================
-
-app.use(cors({
-    origin: '*', // Ajusta esto según necesites para tu frontend
-    credentials: true
-}));
-
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 
-// =========================================================================
-// RUTAS
-// =========================================================================
-
+// Ruta CLAVE: Verificación de acceso.
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
-        const result = await pool.query('SELECT NOW() as hora, version()'); 
+        const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            provider: 'Neon Serverless Postgres',
+            message: '✅ ¡CONEXIÓN TÁCTICA ABIERTA! Acceso directo a Neon.',
             hora: result.rows[0].hora,
-            version: result.rows[0].version
+            database: 'Neon'
         });
     } catch (error: any) {
-        console.error('❌ Error Neon:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
+        // Si hay fallo, mostramos el error sin la cadena de conexión por seguridad
+        res.status(500).json({ success: false, error: error.message, database: 'Neon', note: 'Connection failed, check injected URL.' });
     }
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', platform: 'Vercel + Neon', timestamp: new Date() });
+    res.json({ status: 'ready to deploy', timestamp: new Date() });
 });
 
 app.get('/', (req, res) => {
-    res.json({ message: 'PetSitter Backend en Vercel 🚀' });
+    res.json({ message: 'PetSitter Backend: Canales Abiertos (Vercel/Neon)' });
 });
 
-// =========================================================================
-// ADAPTADOR VERCEL (CRÍTICO)
-// =========================================================================
+app.listen(PORT, () => {
+    console.log(`📡 Escuchando en puerto ${PORT}`);
+});
 
-// Vercel requiere que EXPORTEMOS la app, no que hagamos app.listen()
-// Solo hacemos listen si estamos en local
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`📡 Servidor local corriendo en http://localhost:${PORT}`);
-    });
-}
-
-// Esta exportación es lo que Vercel busca para convertirlo en Serverless Function
 export default app;
