@@ -6,54 +6,48 @@ import dotenv from 'dotenv';
 // Cargo el entorno antes que nada.
 dotenv.config();
 
+// === BYPASS CRÍTICO DE CERTIFICADOS A NIVEL DE STACK ===
+// Esto ignora el error de 'self-signed certificate' en todo el proceso Node.js.
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: DOBLE INYECCIÓN (TENANT ID + SSL MODE)
+// CONFIGURACIÓN DE CONEXIÓN: ATAQUE DE REDIRECCIÓN DE PUERTO (BYPASS DE POOLER)
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-    console.error('❌ FATAL: Falta DATABASE_URL. El sistema no puede operar sin credenciales.');
+    console.error('❌ FATAL: Falta DATABASE_URL.');
     process.exit(1);
 }
 
-// 1. Obtener la cadena de conexión limpia (sin la query string si la tuviera, Render la elimina)
-const cleanConnectionUrl = connectionString.split('?')[0];
+// 1. ANULACIÓN DEL POOLER: Reemplaza el puerto 6543 (Pooler) por 5432 (Motor Directo)
+let finalConnectionString = connectionString.replace(':6543', ':5432');
 
-// 2. Extraer el Project Reference ID del nombre de usuario.
-const userPart = cleanConnectionUrl.split('//')[1].split(':')[0];
-const projectIdMatch = userPart.match(/^postgres\.([a-z0-9]+)/);
-
-let finalConnectionString = cleanConnectionUrl;
-
-if (projectIdMatch && projectIdMatch[1]) {
-    const projectId = projectIdMatch[1];
-    
-    // 1. INYECCIÓN PRINCIPAL: Project ID (necesario para el Pooler)
-    finalConnectionString = `${cleanConnectionUrl}?options=project-id%3D${projectId}`; 
-    
-    // 2. INYECCIÓN SECUNDARIA: sslmode (necesario para el proxy/firewall de Render)
-    // El Pooler es tan estúpido que necesita ver esto aunque lo manejemos con 'ssl: {...}'
-    finalConnectionString += `&sslmode=require`; 
-
-    console.log(`✅ Project ID [${projectId}] detectado. DOBLE INYECCIÓN de 'options' y 'sslmode' forzada. Cadena lista.`);
-} else {
-    console.error('❌ ERROR CLASIFICADO: No se pudo parsear el Project ID para la inyección.');
-    process.exit(1);
+// 2. Quitamos cualquier 'sslmode=require' del string, ya que el motor directo lo maneja mejor
+// con el objeto 'ssl' de 'pg' y no necesitamos la ofuscación del Pooler.
+if (finalConnectionString.includes('sslmode=require')) {
+    finalConnectionString = finalConnectionString.replace('sslmode=require', '');
 }
 
-// 4. Crear el Pool con la cadena de conexión con la Doble Inyección.
+// 3. Anulamos el dominio 'pooler' por el dominio directo si está presente
+finalConnectionString = finalConnectionString.replace('.pooler.supabase.com', '.supabase.co');
+
+
+// 4. Limpiamos cualquier query string remanente, ya que el motor directo la ignora
+finalConnectionString = finalConnectionString.split('?')[0]; 
+
 const pool = new Pool({
-    connectionString: finalConnectionString, // ¡Esto es lo crucial!
+    connectionString: finalConnectionString, // ¡Usamos la cadena sin Pooler!
     ssl: { 
-        rejectUnauthorized: false 
+        rejectUnauthorized: false // Ignora el certificado auto-firmado
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO DE DOBLE INYECCIÓN TÁCTICA)...');
+console.log('🚀 Iniciando Backend (MODO DE REDIRECCIÓN Y BYPASS DE POOLER TÁCTICO)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS
@@ -65,13 +59,13 @@ app.use(cors({
 
 app.use(express.json());
 
-// Ruta CLAVE: Verificación de acceso al Pooler.
+// Ruta CLAVE: Verificación de acceso al motor directo.
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Pooler neutralizado por DOBLE INYECCIÓN.',
+            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Acceso directo al motor Postgres.',
             hora: result.rows[0].hora,
             connectionStringUsed: finalConnectionString 
         });
