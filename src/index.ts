@@ -2,7 +2,6 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-// import { healthCheck } from './handlers/healthCheck';
 
 dotenv.config();
 
@@ -10,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN LIMPIA Y ESTÁNDAR
+// CONFIGURACIÓN ESTÁNDAR PARA POOLER
 // =========================================================================
 
 let connectionString = process.env.DATABASE_URL;
@@ -20,7 +19,7 @@ if (!connectionString) {
     process.exit(1);
 }
 
-// Limpieza básica de parámetros para evitar conflictos
+// Limpiamos parámetros extras de la URL para que no choquen con la config manual
 if (connectionString.includes('?')) {
     connectionString = connectionString.split('?')[0];
 }
@@ -28,19 +27,30 @@ if (connectionString.includes('?')) {
 const pool = new Pool({
     connectionString: connectionString,
     ssl: { 
-        rejectUnauthorized: false // Único requisito real de Supabase
+        rejectUnauthorized: false // Esto es lo único necesario para Supabase
     },
-    connectionTimeoutMillis: 10000
+    connectionTimeoutMillis: 10000 // 10 segundos de espera
 });
 
-console.log('🚀 Iniciando Backend (Configuración Estándar)...');
+console.log('🚀 Iniciando Backend (Modo Pooler)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS
 // =========================================================================
 
+const allowedOrigins = [
+    process.env.FRONTEND_URL_DEV || 'http://localhost:5173', 
+    process.env.FRONTEND_URL_PROD 
+];
+
 app.use(cors({
-    origin: '*', // Permisivo para debug
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+            callback(null, true);
+        } else {
+            callback(null, true);
+        }
+    },
     credentials: true
 }));
 
@@ -51,7 +61,7 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN EXITOSA CON POOLER!',
+            message: '✅ ¡CONEXIÓN EXITOSA VÍA POOLER!',
             hora: result.rows[0].hora
         });
     } catch (error: any) {
@@ -61,15 +71,25 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+    res.json({ status: 'ok', service: 'petsitter-backend' });
 });
 
 app.get('/', (req, res) => {
     res.json({ message: 'PetSitter Backend Online' });
 });
 
-app.listen(PORT, () => {
-    console.log(`📡 Escuchando en puerto ${PORT}`);
-});
+const startServer = async () => {
+    try {
+        await pool.query('SELECT 1');
+        console.log('✅ CONEXIÓN INICIAL EXITOSA');
+    } catch (error: any) {
+        console.error('❌ ERROR CONEXIÓN INICIAL:', error.message);
+    }
+    app.listen(PORT, () => {
+        console.log(`📡 Escuchando en puerto ${PORT}`);
+    });
+};
+
+startServer();
 
 export default app;
