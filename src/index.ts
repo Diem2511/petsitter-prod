@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { Client } from 'pg'; // Usamos Client para prueba directa
+import { Client } from 'pg';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -12,16 +12,11 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', async (req, res) => {
-  // 1. Desarmamos la URL para ver si la estamos leyendo bien (sin mostrar la password)
-  const dbUrl = process.env.DATABASE_URL;
-  
-  // 2. Configuración "Nuclear" para SSL
+  // Configuración LIMPIA que TypeScript acepta
   const client = new Client({
-    connectionString: dbUrl,
+    connectionString: process.env.DATABASE_URL,
     ssl: {
-      rejectUnauthorized: false, // Ignorar validación de firma
-      requestCert: true,         // Solicitar certificado
-      agent: false               // No usar agente HTTP
+      rejectUnauthorized: false // Esta es la única línea vital para evitar el error de certificado
     }
   });
 
@@ -40,7 +35,7 @@ app.get('/', async (req, res) => {
     res.status(500).send({ 
       status: 'ERROR', 
       message: 'Fallo de conexión DB', 
-      code: err.code,
+      code: err.code || 'UNKNOWN',
       details: err.message
     });
   }
