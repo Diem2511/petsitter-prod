@@ -1,9 +1,10 @@
-﻿import pool from './postgres.config';
+﻿import { poolConfig } from './postgres.config';
+import pool from './postgres.config';
 
-// Re-exportamos el pool y la config para que los otros archivos no fallen
-export const dbConfig = {
-    // Si algún archivo viejo busca propiedades específicas, aquí simulamos o exponemos
-    pool: pool
-};
+// ¡ESTA ES LA MAGIA!
+// Exportamos la "configuración" cruda, porque tus handlers (chat.ts, etc.)
+// seguramente están haciendo "new Pool(dbConfig)".
+export const dbConfig = poolConfig;
 
+// También exportamos el pool por si algún archivo lo importa directo
 export { pool };

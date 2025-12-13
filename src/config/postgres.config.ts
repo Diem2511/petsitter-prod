@@ -1,117 +1,46 @@
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 console.log('🚀 Inicializando PostgreSQL...');
-console.log('🔍 Verificando variables de entorno:');
 
-// DEBUG: Mostrar variables importantes (sin password completo)
-const dbHost = process.env.DB_HOST || process.env.PGHOST;
-const dbUser = process.env.DB_USER || process.env.PGUSER;
-const databaseUrl = process.env.DATABASE_URL;
-
-console.log('   DB_HOST:', dbHost ? '✅ Configurado' : '❌ No configurado');
-console.log('   DB_USER:', dbUser ? '✅ Configurado' : '❌ No configurado');
-console.log('   DATABASE_URL:', databaseUrl ? '✅ Configurado' : '❌ No configurado');
-
-if (databaseUrl) {
-  // Ocultar password para logs seguros
-  const safeUrl = databaseUrl.replace(/:[^:]*@/, ':****@');
-  console.log('   Connection string:', safeUrl);
-}
-
-// OPCIÓN 1: Usar DATABASE_URL (RECOMENDADO)
-let pool: Pool;
-
-if (databaseUrl) {
-  console.log('📦 Usando DATABASE_URL para la conexión');
-  
-  // Asegurar que tenga sslmode correcto
-  let connectionString = databaseUrl;
-  if (!connectionString.includes('sslmode=')) {
-    connectionString += '?sslmode=require';
-  } else if (connectionString.includes('sslmode=no-verify')) {
-    connectionString = connectionString.replace('sslmode=no-verify', 'sslmode=require');
-  }
-  
-  pool = new Pool({
-    connectionString: connectionString,
+// 1. Definimos la configuración (SIN 'require: true' para calmar a TypeScript)
+export const poolConfig = {
+    connectionString: process.env.DATABASE_URL,
     ssl: {
-      rejectUnauthorized: false,
-      require: true
+        rejectUnauthorized: false, // Esto es lo único que Supabase necesita
     },
-    // Forzar IPv4 para evitar problemas de DNS
+    // Forzamos timeouts
     connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 30000,
-  });
-  
-} else {
-  // OPCIÓN 2: Usar variables individuales
-  console.log('🔧 Usando variables individuales DB_*');
-  
-  const host = dbHost;
-  
-  if (!host) {
-    console.error('❌ ERROR: No hay host configurado para PostgreSQL');
-    console.error('   Configura DB_HOST o DATABASE_URL en Render Environment');
-    // Crear pool sin conexión para evitar crash
-    pool = new Pool();
-  } else {
-    console.log('   Host:', host);
-    
-    pool = new Pool({
-      host: host,
-      user: dbUser || 'postgres',
-      password: process.env.DB_PASSWORD || process.env.PGPASSWORD,
-      database: process.env.DB_NAME || process.env.PGDATABASE || 'postgres',
-      port: parseInt(process.env.DB_PORT || process.env.PGPORT || '5432'),
-      
-      // SSL OBLIGATORIO para Supabase
-      ssl: {
-        rejectUnauthorized: false,
-        require: true
-      },
-      
-      // Forzar IPv4
-      family: 4,
-      
-      // Timeouts
-      connectionTimeoutMillis: 10000,
-      idleTimeoutMillis: 30000,
-      max: 5,
-    });
-  }
+    query_timeout: 10000,
+};
+
+// Fallback por si no hay DATABASE_URL (para desarrollo local sin .env correcto)
+if (!process.env.DATABASE_URL) {
+    console.log('⚠️ No hay DATABASE_URL, usando variables sueltas...');
+    // @ts-ignore: Ignoramos validación estricta aquí para el fallback
+    poolConfig.host = process.env.DB_HOST;
+    // @ts-ignore
+    poolConfig.user = process.env.DB_USER;
+    // @ts-ignore
+    poolConfig.password = process.env.DB_PASSWORD;
+    // @ts-ignore
+    poolConfig.database = process.env.DB_NAME;
+    // @ts-ignore
+    poolConfig.port = parseInt(process.env.DB_PORT || '5432');
+    delete poolConfig.connectionString;
 }
 
-// Test de conexión asíncrono (no bloqueante)
-setTimeout(async () => {
-  try {
-    const client = await pool.connect();
-    const result = await client.query('SELECT NOW() as current_time, version() as version');
-    client.release();
-    
-    console.log('✅ PostgreSQL conectado exitosamente!');
-    console.log('   Hora del servidor:', result.rows[0].current_time);
-    console.log('   Versión:', result.rows[0].version.split('\n')[0]);
-  } catch (err: any) {
-    console.error('❌ Error conectando a PostgreSQL:');
-    console.error('   Mensaje:', err.message);
-    console.error('   Código:', err.code);
-    
-    if (databaseUrl) {
-      const safeUrl = databaseUrl.replace(/:[^:]*@/, ':****@');
-      console.error('   Connection string:', safeUrl);
-    } else {
-      console.error('   Host:', dbHost);
-      console.error('   User:', dbUser);
-    }
-    
-    console.error('\n💡 Solución:');
-    console.error('   1. Verifica las credenciales en Supabase');
-    console.error('   2. Asegúrate que DATABASE_URL tenga sslmode=require');
-    console.error('   3. Revisa que el proyecto Supabase esté activo');
-  }
-}, 1000);
+// 2. Creamos el pool compartido
+const pool = new Pool(poolConfig);
+
+pool.query('SELECT NOW() as time')
+    .then(result => {
+        console.log('✅ PostgreSQL conectado! Hora DB:', result.rows[0].time);
+    })
+    .catch(err => {
+        console.error('❌ Error conectando a PostgreSQL:', err.message);
+    });
 
 export default pool;
