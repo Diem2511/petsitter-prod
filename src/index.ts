@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: CORRECCIÓN DE HOSTNAME FINAL (5432)
+// CONFIGURACIÓN DE CONEXIÓN: RECONSTRUCCIÓN DE HOSTNAME ABSOLUTO (5432)
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
@@ -23,34 +23,49 @@ if (!connectionString) {
     process.exit(1);
 }
 
-// 1. ANULACIÓN DEL POOLER: Reemplaza el puerto 6543 (Pooler) por 5432 (Motor Directo)
-let finalConnectionString = connectionString.replace(':6543', ':5432');
+// 1. Extraer el Project Reference ID (qzgdviycwxzmvwtazkis)
+const projectIdMatch = connectionString.match(/postgres\.([a-z0-9]+)/);
+let projectId = projectIdMatch && projectIdMatch[1] ? projectIdMatch[1] : '';
 
-// 2. Quitamos cualquier 'sslmode=require' del string
-if (finalConnectionString.includes('sslmode=require')) {
-    finalConnectionString = finalConnectionString.replace('sslmode=require', '');
+// 2. Reemplazar la parte del host para forzar el formato ProjectID.Region.supabase.co
+// y el puerto 5432.
+
+if (projectId) {
+    // Busca la parte del dominio (ej: aws-0-sa-east-1.pooler.supabase.com)
+    let domainPart = connectionString.match(/@(.+?):/);
+    if (domainPart && domainPart[1]) {
+        // Limpiamos el dominio de 'pooler' y lo dejamos en el formato básico
+        let baseHost = domainPart[1].replace('.pooler.supabase.com', '.supabase.co');
+        
+        // ¡RECONSTRUCCIÓN FINAL! Inserta el Project ID al inicio del hostname.
+        let newHost = `${projectId}.${baseHost.replace(projectId + '.', '')}`; // Asegura que no se duplique
+        
+        // Reemplaza el host, el puerto y elimina la query string
+        let finalConnectionString = connectionString
+            .replace(domainPart[1], newHost) // Inyecta el host reconstruido
+            .replace(':6543', ':5432')        // Cambia el puerto
+            .split('?')[0];                   // Elimina la query string
+
+        // Asigna la cadena final
+        connectionString = finalConnectionString;
+        
+        console.log(`✅ Hostname reconstruido y port 5432 forzado: ${newHost}`);
+    }
 }
 
-// 3. Limpiamos el subdominio 'pooler' si está presente, PERO CON MÁS CUIDADO.
-// Solo quitamos '.pooler' para dejar el subdominio correcto (e.g., 'aws-0-sa-east-1.supabase.co')
-finalConnectionString = finalConnectionString.replace('.pooler.', '.');
-
-
-// 4. Limpiamos cualquier query string remanente (incluyendo el 'options=...')
-finalConnectionString = finalConnectionString.split('?')[0]; 
 
 const pool = new Pool({
-    connectionString: finalConnectionString, 
+    connectionString: connectionString, 
     ssl: { 
         rejectUnauthorized: false
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO ACCESO DIRECTO Y CORRECCIÓN DE DNS)...');
+console.log('🚀 Iniciando Backend (MODO ACCESO DIRECTO Y RECONSTRUCCIÓN DE HOSTNAME)...');
 
 // =========================================================================
-// MIDDLEWARE Y RUTAS
+// MIDDLEWARE Y RUTAS (el resto del código sigue igual)
 // =========================================================================
 app.use(cors({
     origin: '*', 
@@ -67,11 +82,11 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
             success: true,
             message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! El canal está libre para la subversión.',
             hora: result.rows[0].hora,
-            connectionStringUsed: finalConnectionString 
+            connectionStringUsed: connectionString 
         });
     } catch (error: any) {
         console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
-        res.status(500).json({ success: false, error: error.message, connectionStringUsed: finalConnectionString });
+        res.status(500).json({ success: false, error: error.message, connectionStringUsed: connectionString });
     }
 });
 
