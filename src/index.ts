@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: ATAQUE DE INYECCIÓN DE OPTIONS (Solución Forzada)
+// CONFIGURACIÓN DE CONEXIÓN: DOBLE INYECCIÓN (TENANT ID + SSL MODE)
 // =========================================================================
 let connectionString = process.env.DATABASE_URL;
 
@@ -22,8 +22,7 @@ if (!connectionString) {
 // 1. Obtener la cadena de conexión limpia (sin la query string si la tuviera, Render la elimina)
 const cleanConnectionUrl = connectionString.split('?')[0];
 
-// 2. Extraer el Project Reference ID del nombre de usuario para inyectarlo.
-// Esto usa RegEx para encontrar 'postgres.PROYECTO_ID'
+// 2. Extraer el Project Reference ID del nombre de usuario.
 const userPart = cleanConnectionUrl.split('//')[1].split(':')[0];
 const projectIdMatch = userPart.match(/^postgres\.([a-z0-9]+)/);
 
@@ -31,26 +30,30 @@ let finalConnectionString = cleanConnectionUrl;
 
 if (projectIdMatch && projectIdMatch[1]) {
     const projectId = projectIdMatch[1];
-    // 3. Inyectar la Query String crítica (?options=project-id) al final.
-    // Usamos %3D por precaución. Esto es lo que el Pooler necesita.
+    
+    // 1. INYECCIÓN PRINCIPAL: Project ID (necesario para el Pooler)
     finalConnectionString = `${cleanConnectionUrl}?options=project-id%3D${projectId}`; 
-    console.log(`✅ Project ID [${projectId}] detectado e inyectado forzosamente. Cadena finalizada.`);
+    
+    // 2. INYECCIÓN SECUNDARIA: sslmode (necesario para el proxy/firewall de Render)
+    // El Pooler es tan estúpido que necesita ver esto aunque lo manejemos con 'ssl: {...}'
+    finalConnectionString += `&sslmode=require`; 
+
+    console.log(`✅ Project ID [${projectId}] detectado. DOBLE INYECCIÓN de 'options' y 'sslmode' forzada. Cadena lista.`);
 } else {
-    // Si la estructura del username es diferente a 'postgres.ID', esto fallará.
-    console.error('❌ ERROR CLASIFICADO: No se pudo parsear el Project ID para la inyección. Revisa el formato de la URL.');
+    console.error('❌ ERROR CLASIFICADO: No se pudo parsear el Project ID para la inyección.');
     process.exit(1);
 }
 
-// 4. Crear el Pool con la cadena de conexión inyectada.
+// 4. Crear el Pool con la cadena de conexión con la Doble Inyección.
 const pool = new Pool({
-    connectionString: finalConnectionString, 
+    connectionString: finalConnectionString, // ¡Esto es lo crucial!
     ssl: { 
-        rejectUnauthorized: false // Bypassing SSL check.
+        rejectUnauthorized: false 
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO INYECCIÓN FORZADA DE TENANT ID)...');
+console.log('🚀 Iniciando Backend (MODO DE DOBLE INYECCIÓN TÁCTICA)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS
@@ -68,9 +71,9 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Pooler neutralizado por Inyección.',
+            message: '✅ ¡CONEXIÓN TÁCTICA EXITOSA! Pooler neutralizado por DOBLE INYECCIÓN.',
             hora: result.rows[0].hora,
-            connectionStringUsed: finalConnectionString // Para verificación.
+            connectionStringUsed: finalConnectionString 
         });
     } catch (error: any) {
         console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
