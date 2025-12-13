@@ -3,10 +3,13 @@
     "version": "1.0.0",
     "description": "",
     "main": "dist/index.js",
+    {
     "scripts": {
-        "build": "tsc",
-        "start": "node --dns-result-order=ipv4first dist/index.js"
-    },
+    "build": "tsc",
+    "start": "node --dns-result-order=ipv4first dist/index-fixed.js",
+    "dev": "nodemon src/index-fixed.ts"
+    }
+    }
     "keywords": [],
     "author": "",
     "license": "ISC",
