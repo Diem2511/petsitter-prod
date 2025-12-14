@@ -32,24 +32,35 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 const pg_1 = require("pg");
 const dotenv = __importStar(require("dotenv"));
+const url_1 = require("url");
 dotenv.config();
-console.log('🚀 Inicializando PostgreSQL...');
-// Validación de emergencia: Si la URL tiene IPv6, avisamos
-if ((_a = process.env.DATABASE_URL) === null || _a === void 0 ? void 0 : _a.includes('2600:')) {
-    console.error('❌ ERROR FATAL: DATABASE_URL contiene una IP IPv6. CAMBIALA EN RENDER POR EL DOMINIO db.qzgdv...supabase.co');
-}
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false, // Esto es lo único que Supabase necesita
-    },
+console.log('🚀 Inicializando PostgreSQL (Configuración Desglosada IPv4)...');
+let config = {
+    ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 10000,
-});
+};
+if (process.env.DATABASE_URL) {
+    try {
+        // Parseamos la URL nosotros mismos
+        // Esto ignora si la variable tiene basura, extraemos lo útil
+        // Si Render tiene una IP en la URL, la ignoramos y forzamos el host real
+        const parser = new url_1.URL(process.env.DATABASE_URL);
+        config.user = parser.username;
+        config.password = parser.password;
+        config.host = 'db.qzgdviycwxzmvwtazkis.supabase.co'; // <--- HARDCODED PARA ASEGURARNOS
+        config.port = 5432;
+        config.database = 'postgres';
+    }
+    catch (e) {
+        console.error('Error parseando URL, usando fallback string');
+        config.connectionString = process.env.DATABASE_URL;
+    }
+}
+const pool = new pg_1.Pool(config);
 pool.query('SELECT NOW()')
-    .then(() => console.log('✅ PostgreSQL conectado exitosamente'))
-    .catch(err => console.error('❌ Error conexión inicial:', err.message));
+    .then(() => console.log('✅ CONEXIÓN EXITOSA'))
+    .catch(err => console.error('❌ Error:', err.message));
 exports.default = pool;
