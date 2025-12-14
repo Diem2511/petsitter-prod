@@ -2,7 +2,7 @@ import { S3Client, ListBucketsCommand } from "@aws-sdk/client-s3";
 
 export default async function handler(req, res) {
   try {
-    const client = new S3Client({
+    const s3 = new S3Client({
       endpoint: process.env.S3_ENDPOINT,
       region: process.env.AWS_REGION || "sa-east-1",
       credentials: {
@@ -10,20 +10,22 @@ export default async function handler(req, res) {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
       },
       forcePathStyle: true,
-      tls: false
+      tls: false,
     });
 
-    const data = await client.send(new ListBucketsCommand({}));
+    const result = await s3.send(new ListBucketsCommand({}));
 
     res.status(200).json({
       success: true,
-      buckets: data.Buckets?.length || 0
+      message: "S3 OK",
+      buckets: result.Buckets?.length || 0,
     });
-  } catch (err) {
+  } catch (e) {
     res.status(500).json({
       success: false,
-      error: err.message
+      error: e.message,
     });
   }
 }
+
 
