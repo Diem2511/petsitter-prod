@@ -3,7 +3,7 @@ import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 // === IMPORTS DE HANDLERS Y LÓGICA DE STORAGE ===
-import { uploadMiddleware, uploadTest } from './handlers/storageHandler'; 
+import { uploadMiddleware, uploadTest, testS3Connection } from './handlers/storageHandler'; 
 import { S3Client, ListBucketsCommand } from '@aws-sdk/client-s3';
 // ===============================================
 
@@ -15,18 +15,14 @@ dotenv.config();
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
 
 const app = express();
-// Puerto corregido: Usamos la variable de entorno o 10000 para Render/Cloud
-const PORT = process.env.PORT || 10000; 
+const PORT = process.env.PORT || 3000; // Vercel usa 3000 o process.env.PORT
 
 // =========================================================================
 // CONFIGURACIÓN DE CONEXIÓN: BASE DE DATOS (NEON)
 // =========================================================================
-
-// Usamos la variable de entorno que DEBES haber corregido en Render
 const CONNECTION_STRING = process.env.DATABASE_URL;
 
 if (!CONNECTION_STRING) {
-    // Usar console.error y lanzar un error en lugar de throw en el contexto de Vercel/Render
     console.error('FATAL: DATABASE_URL no está configurada.');
     process.exit(1); 
 }
@@ -39,7 +35,7 @@ const pool = new Pool({
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO NEON/RENDER - PRODUCCIÓN LIMPIA)...');
+console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - PRODUCCIÓN LIMPIA)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS BÁSICAS
@@ -54,7 +50,7 @@ app.get('/api/health', async (req: Request, res: Response) => {
     let dbStatus = 'failure';
     let s3Status = 'failure';
     let s3Error = null;
-
+    
     // 1. Prueba de Conexión a Base de Datos (PostgreSQL/Neon)
     try {
         await pool.query('SELECT NOW()');
@@ -67,13 +63,11 @@ app.get('/api/health', async (req: Request, res: Response) => {
     try {
         const s3Client = new S3Client({
             endpoint: process.env.S3_ENDPOINT,
-            // Usar 'sa-east-1' si el endpoint de Supabase está en esa región, o tomarlo de env
             region: process.env.AWS_REGION || 'sa-east-1', 
             credentials: {
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
                 secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
             },
-            // CRÍTICO: Para compatibilidad con endpoints no AWS
             tls: false, 
             forcePathStyle: true,
         });
@@ -129,22 +123,22 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
     }
 });
 
-// Ruta CLAVE 2: Prueba de Subida de Archivos (Para cerrar la FASE 3)
-// Usa Multer para extraer el archivo y el handler para subirlo a S3.
-app.post('/api/test-upload', uploadMiddleware.single('file'), uploadTest); // ¡NUEVO!
+// Ruta CLAVE 2: Prueba de Subida de Archivos (POST, requiere Postman/Herramienta)
+app.post('/api/test-upload', uploadMiddleware.single('file'), uploadTest); 
+
+// Ruta CLAVE 3: Prueba S3 de un solo clic (GET, en el navegador)
+app.get('/api/test-s3', testS3Connection); // ¡NUEVO!
 
 
 // =========================================================================
 // INICIO DEL SERVIDOR
 // =========================================================================
 app.get('/', (req, res) => {
-    res.json({ message: 'PetSitter Backend: Canales Abiertos (Render/Neon)' });
+    res.json({ message: 'PetSitter Backend: Canales Abiertos (Vercel/Neon)' });
 });
 
 app.listen(PORT, () => {
     console.log(`📡 Escuchando en puerto ${PORT}`);
-    console.log(`🌐 URL de prueba de DB: /api/test-db`);
-    console.log(`🌐 URL de prueba de S3: POST /api/test-upload`);
 });
 
 export default app;
