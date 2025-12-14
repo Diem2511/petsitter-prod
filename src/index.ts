@@ -2,28 +2,33 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-// === IMPORTS ADICIONALES PARA EL TEST DE S3 ===
+// === IMPORTS DE HANDLERS Y LÓGICA DE STORAGE ===
+import { uploadMiddleware, uploadTest } from './handlers/storageHandler'; 
 import { S3Client, ListBucketsCommand } from '@aws-sdk/client-s3';
-// =============================================
+// ===============================================
 
 // Cargo el entorno antes que nada.
 dotenv.config();
 
 // === BYPASS CRÍTICO DE CERTIFICADOS A NIVEL DE STACK ===
+// CRÍTICO: Mantiene la compatibilidad con el endpoint de Supabase Storage/Neon
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
 
 const app = express();
-const PORT = process.env.PORT || 3000; 
+// Puerto corregido: Usamos la variable de entorno o 10000 para Render/Cloud
+const PORT = process.env.PORT || 10000; 
 
 // =========================================================================
 // CONFIGURACIÓN DE CONEXIÓN: BASE DE DATOS (NEON)
 // =========================================================================
 
-// Usamos la variable de entorno que DEBES haber corregido en Vercel
+// Usamos la variable de entorno que DEBES haber corregido en Render
 const CONNECTION_STRING = process.env.DATABASE_URL;
 
 if (!CONNECTION_STRING) {
-    throw new Error('FATAL: DATABASE_URL no está configurada.');
+    // Usar console.error y lanzar un error en lugar de throw en el contexto de Vercel/Render
+    console.error('FATAL: DATABASE_URL no está configurada.');
+    process.exit(1); 
 }
 
 const pool = new Pool({
@@ -34,7 +39,7 @@ const pool = new Pool({
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - PRODUCCIÓN LIMPIA)...');
+console.log('🚀 Iniciando Backend (MODO NEON/RENDER - PRODUCCIÓN LIMPIA)...');
 
 // =========================================================================
 // MIDDLEWARE Y RUTAS BÁSICAS
@@ -62,18 +67,21 @@ app.get('/api/health', async (req: Request, res: Response) => {
     try {
         const s3Client = new S3Client({
             endpoint: process.env.S3_ENDPOINT,
-            region: process.env.AWS_REGION || 'us-east-1', 
+            // Usar 'sa-east-1' si el endpoint de Supabase está en esa región, o tomarlo de env
+            region: process.env.AWS_REGION || 'sa-east-1', 
             credentials: {
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
                 secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-            }
+            },
+            // CRÍTICO: Para compatibilidad con endpoints no AWS
+            tls: false, 
+            forcePathStyle: true,
         });
         // Intentamos listar los buckets para probar la autenticación
         await s3Client.send(new ListBucketsCommand({})); 
         s3Status = 'success';
     } catch (e: any) {
         s3Status = 'failure';
-        // Solo enviamos el mensaje del error para no exponer toda la pila de errores
         s3Error = e.message ? e.message.substring(0, 150) + '...' : 'Unknown S3 error';
     }
 
@@ -96,10 +104,10 @@ app.get('/api/health', async (req: Request, res: Response) => {
 });
 
 // =========================================================================
-// RUTAS DE DIAGNÓSTICO (Existentes)
+// RUTAS DE DIAGNÓSTICO Y PRUEBAS (FASE 3)
 // =========================================================================
 
-// Ruta CLAVE: Verificación de acceso DB.
+// Ruta CLAVE 1: Verificación de acceso DB (ya confirmada)
 app.get('/api/test-db', async (req: Request, res: Response) => {
     try {
         const result = await pool.query('SELECT NOW() as hora'); 
@@ -116,18 +124,27 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
             success: false, 
             error: error.message, 
             database: 'Neon', 
-            note: 'FINAL FAILURE: Check DATABASE_URL password in Vercel.' 
+            note: 'FINAL FAILURE: Check DATABASE_URL password.' 
         });
     }
 });
 
+// Ruta CLAVE 2: Prueba de Subida de Archivos (Para cerrar la FASE 3)
+// Usa Multer para extraer el archivo y el handler para subirlo a S3.
+app.post('/api/test-upload', uploadMiddleware.single('file'), uploadTest); // ¡NUEVO!
 
+
+// =========================================================================
+// INICIO DEL SERVIDOR
+// =========================================================================
 app.get('/', (req, res) => {
-    res.json({ message: 'PetSitter Backend: Canales Abiertos (Vercel/Neon)' });
+    res.json({ message: 'PetSitter Backend: Canales Abiertos (Render/Neon)' });
 });
 
 app.listen(PORT, () => {
     console.log(`📡 Escuchando en puerto ${PORT}`);
+    console.log(`🌐 URL de prueba de DB: /api/test-db`);
+    console.log(`🌐 URL de prueba de S3: POST /api/test-upload`);
 });
 
 export default app;
