@@ -1,73 +1,32 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import { Pool } from 'pg';
-import dotenv from 'dotenv';
-
-// Cargo el entorno antes que nada.
-dotenv.config();
-
-// === MANTENEMOS EL BYPASS TLS POR SI EL CERTIFICADO DE NEON DA PROBLEMAS ===
-// (Aunque Neon es más limpio, no podemos arriesgarnos al error 'self-signed')
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
-
-const app = express();
-const PORT = process.env.PORT || 3000; 
-
-// =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: ESTÁNDAR PARA NEON (SIN TRUCOS)
-// =========================================================================
-let connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-    console.error('❌ FATAL: Falta DATABASE_URL. El sistema no puede operar sin credenciales.');
-    // Si falla en Vercel, no salimos. La Serverless Function debe terminar con error HTTP.
+{
+  "name": "petsitter-backend",
+  "version": "1.0.0",
+  "description": "PetSitter Backend API",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "express",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.500.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.3",
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.16",
+    "@types/pg": "^8.11.0",
+    "ts-node": "^10.9.2"
+  }
 }
-
-// Neon no requiere manipulación de hostname, puertos, o query strings.
-// El driver 'pg' hace todo el trabajo. Usamos el string tal cual.
-
-const pool = new Pool({
-    connectionString: connectionString, // ¡Usamos la URL tal cual la configuraste en Vercel!
-    ssl: { 
-        rejectUnauthorized: false // Ignora el certificado auto-firmado
-    },
-    connectionTimeoutMillis: 10000
-});
-
-console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - CANAL LIMPIO)...');
-
-// =========================================================================
-// MIDDLEWARE Y RUTAS
-// =========================================================================
-app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json());
-
-// Ruta CLAVE: Verificación de acceso.
-app.get('/api/test-db', async (req: Request, res: Response) => {
-    try {
-        const result = await pool.query('SELECT NOW() as hora'); 
-        res.json({
-            success: true,
-            message: '✅ ¡CONEXIÓN TÁCTICA ABIERTA! Acceso directo a Neon.',
-            hora: result.rows[0].hora,
-            database: 'Neon'
-        });
-    } catch (error: any) {
-        console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
-        res.status(500).json({ success: false, error: error.message, database: 'Neon', connectionStringUsed: 'Verify URL in Vercel panel' });
-    }
-});
-
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ready to deploy', timestamp: new Date() });
-});
-
-app.get('/', (req, res) => {
-    res.json({ message: 'PetSitter Backend: Canales Abiertos (Vercel/Neon)' });
-});
-
-app.listen(PORT, () => {
-    console.log(`📡 Escuchando en puerto ${PORT}`);
-});
-
-export default app;
