@@ -13,28 +13,27 @@ const app = express();
 const PORT = process.env.PORT || 3000; 
 
 // =========================================================================
-// CONFIGURACIÓN DE CONEXIÓN: ¡INYECCIÓN DE LA CLAVE VERIFICADA!
+// CONFIGURACIÓN DE CONEXIÓN: VOLVER A USAR DATABASE_URL
 // =========================================================================
 
-// --- ¡CADENA DE CONEXIÓN INYECTADA DIRECTAMENTE Y ÚNICA! ---
-const CONNECTION_STRING_INJECTED = 'postgresql://neondb_owner:npg_bN6nDBJig4Vl@ep-proud-dawn-ahel3tta-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+// Usamos la variable de entorno que DEBES haber corregido en Vercel
+const CONNECTION_STRING = process.env.DATABASE_URL;
 
-// ¡Pool configurado solo con la cadena inyectada!
+if (!CONNECTION_STRING) {
+    throw new Error('FATAL: DATABASE_URL no está configurada.');
+}
+
 const pool = new Pool({
-    connectionString: CONNECTION_STRING_INJECTED, 
+    connectionString: CONNECTION_STRING, 
     ssl: { 
         rejectUnauthorized: false
     },
     connectionTimeoutMillis: 10000
 });
 
-console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - ¡CLAVE INYECTADA VERIFICADA!)...');
+console.log('🚀 Iniciando Backend (MODO NEON/VERCEL - PRODUCCIÓN LIMPIA)...');
 
-// =========================================================================
-// MIDDLEWARE Y RUTAS
-// =========================================================================
-app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json());
+// ... (Resto del código de middleware y rutas)
 
 // Ruta CLAVE: Verificación de acceso.
 app.get('/api/test-db', async (req: Request, res: Response) => {
@@ -42,18 +41,18 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
         const result = await pool.query('SELECT NOW() as hora'); 
         res.json({
             success: true,
-            message: '✅ ¡CANAL DE DATOS ABIERTO! Acceso a Neon con clave nueva.',
+            message: '✅ ¡CANAL DE DATOS ABIERTO! Conexión Establecida.',
             hora: result.rows[0].hora,
             database: 'Neon',
             status: 'Connection established successfully.'
         });
     } catch (error: any) {
-        console.error('❌ Error DB - FALLO TÁCTICO:', error.message);
+        console.error('❌ Error DB - FALLO DE AUTENTICACIÓN:', error.message);
         res.status(500).json({ 
             success: false, 
             error: error.message, 
             database: 'Neon', 
-            note: 'FINAL FAILURE: Check Firewall/Password.' 
+            note: 'FINAL FAILURE: Check DATABASE_URL password in Vercel.' 
         });
     }
 });
