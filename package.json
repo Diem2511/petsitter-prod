@@ -1,7 +1,8 @@
 {
-  "name": "petsitter-prod",
-  "private": true,
+  "name": "backend",
+  "version": "1.0.0",
+  "type": "module",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.600.0"
+    "@neondatabase/serverless": "^0.10.5"
   }
 }
